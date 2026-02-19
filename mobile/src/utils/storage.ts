@@ -1,0 +1,40 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const KEYS = {
+  TOKEN: '@carenearby/token',
+  USER: '@carenearby/user',
+} as const;
+
+export interface StoredUser {
+  id: string;
+  name: string;
+  phone: string;
+  role: 'CUSTOMER' | 'PSW' | 'ADMIN';
+}
+
+export const Storage = {
+  async saveAuth(token: string, user: StoredUser): Promise<void> {
+    await AsyncStorage.multiSet([
+      [KEYS.TOKEN, token],
+      [KEYS.USER, JSON.stringify(user)],
+    ]);
+  },
+
+  async getToken(): Promise<string | null> {
+    return AsyncStorage.getItem(KEYS.TOKEN);
+  },
+
+  async getUser(): Promise<StoredUser | null> {
+    const raw = await AsyncStorage.getItem(KEYS.USER);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as StoredUser;
+    } catch {
+      return null;
+    }
+  },
+
+  async clearAuth(): Promise<void> {
+    await AsyncStorage.multiRemove([KEYS.TOKEN, KEYS.USER]);
+  },
+};

@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "CareNearby",
+    "slug": "carenearby",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "ca.carenearby.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "CareNearby uses your location to find nearby PSWs.",
+        "NSLocationAlwaysUsageDescription": "CareNearby uses your location to match PSWs to care requests."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#007AFF"
+      },
+      "package": "ca.carenearby.app",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "web": {},
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "CareNearby needs your location to find nearby PSW workers and match care requests."
+        }
+      ]
+    ],
+    "extra": {
+      "apiUrl": "http://localhost:3000"
+    }
+  }
+}
