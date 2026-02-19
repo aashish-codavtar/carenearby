@@ -148,71 +148,99 @@ export function CreateBookingScreen() {
 
           {/* Date & Time Pickers */}
           <Text style={styles.label}>Date & Time</Text>
-          <View style={styles.dateTimeRow}>
-            {/* Date button */}
-            <TouchableOpacity
-              style={[styles.dateBtn, { flex: 1.4 }]}
-              onPress={() => setShowDatePicker(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.dateBtnIcon}>📅</Text>
-              <Text style={styles.dateBtnText}>{formattedDate}</Text>
-            </TouchableOpacity>
 
-            {/* Time button */}
-            <TouchableOpacity
-              style={[styles.dateBtn, { flex: 1 }]}
-              onPress={() => setShowTimePicker(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.dateBtnIcon}>🕐</Text>
-              <Text style={styles.dateBtnText}>{formattedTime}</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* iOS inline pickers */}
-          {Platform.OS === 'ios' && (
+          {Platform.OS === 'web' ? (
+            // Web: native HTML datetime-local input
+            // @ts-ignore – HTML input element works via react-native-web
+            <input
+              type="datetime-local"
+              value={scheduledDate.toISOString().slice(0, 16)}
+              min={minDate.toISOString().slice(0, 16)}
+              onChange={(e: any) => {
+                const d = new Date(e.target.value);
+                if (!isNaN(d.getTime())) setScheduledDate(d);
+              }}
+              style={{
+                fontSize: 16,
+                padding: 14,
+                borderRadius: 12,
+                border: `2px solid ${Colors.systemBlue}`,
+                color: Colors.systemBlue,
+                fontWeight: '600',
+                width: '100%',
+                marginBottom: 8,
+                boxSizing: 'border-box',
+              }}
+            />
+          ) : (
             <>
-              {showDatePicker && (
+              <View style={styles.dateTimeRow}>
+                {/* Date button */}
+                <TouchableOpacity
+                  style={[styles.dateBtn, { flex: 1.4 }]}
+                  onPress={() => setShowDatePicker(true)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.dateBtnIcon}>📅</Text>
+                  <Text style={styles.dateBtnText}>{formattedDate}</Text>
+                </TouchableOpacity>
+
+                {/* Time button */}
+                <TouchableOpacity
+                  style={[styles.dateBtn, { flex: 1 }]}
+                  onPress={() => setShowTimePicker(true)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.dateBtnIcon}>🕐</Text>
+                  <Text style={styles.dateBtnText}>{formattedTime}</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* iOS inline pickers */}
+              {Platform.OS === 'ios' && (
+                <>
+                  {showDatePicker && (
+                    <DateTimePicker
+                      value={scheduledDate}
+                      mode="date"
+                      display="inline"
+                      minimumDate={minDate}
+                      onChange={handleDateChange}
+                      accentColor={Colors.systemBlue}
+                      style={styles.iosPicker}
+                    />
+                  )}
+                  {showTimePicker && (
+                    <DateTimePicker
+                      value={scheduledDate}
+                      mode="time"
+                      display="spinner"
+                      onChange={handleTimeChange}
+                      style={styles.iosPicker}
+                    />
+                  )}
+                </>
+              )}
+
+              {/* Android pickers (shown as dialogs) */}
+              {Platform.OS === 'android' && showDatePicker && (
                 <DateTimePicker
                   value={scheduledDate}
                   mode="date"
-                  display="inline"
+                  display="default"
                   minimumDate={minDate}
                   onChange={handleDateChange}
-                  accentColor={Colors.systemBlue}
-                  style={styles.iosPicker}
                 />
               )}
-              {showTimePicker && (
+              {Platform.OS === 'android' && showTimePicker && (
                 <DateTimePicker
                   value={scheduledDate}
                   mode="time"
-                  display="spinner"
+                  display="default"
                   onChange={handleTimeChange}
-                  style={styles.iosPicker}
                 />
               )}
             </>
-          )}
-
-          {/* Android pickers (shown as dialogs) */}
-          {Platform.OS === 'android' && showDatePicker && (
-            <DateTimePicker
-              value={scheduledDate}
-              mode="date"
-              display="default"
-              minimumDate={minDate}
-              onChange={handleDateChange}
-            />
-          )}
-          {Platform.OS === 'android' && showTimePicker && (
-            <DateTimePicker
-              value={scheduledDate}
-              mode="time"
-              display="default"
-              onChange={handleTimeChange}
-            />
           )}
 
           {/* Hours */}

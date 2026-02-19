@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
   RefreshControl,
   StyleSheet,
   Text,
@@ -28,19 +29,33 @@ export function NearbyJobsScreen() {
 
   const requestLocationAndLoad = useCallback(async () => {
     try {
-      // Request GPS permission (required for PSW nearby matching)
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        setLocationStatus('ok');
-        const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
+      if (Platform.OS === 'web') {
+        // Use browser Geolocation API on web
+        await new Promise<void>((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              setLocationStatus('ok');
+              coordsRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+              resolve();
+            },
+            () => { setLocationStatus('denied'); resolve(); }
+          );
         });
-        coordsRef.current = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        };
       } else {
-        setLocationStatus('denied');
+        // Request GPS permission (required for PSW nearby matching)
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          setLocationStatus('ok');
+          const pos = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          coordsRef.current = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          };
+        } else {
+          setLocationStatus('denied');
+        }
       }
     } catch {
       setLocationStatus('denied');

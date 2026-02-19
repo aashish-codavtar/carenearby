@@ -2,6 +2,7 @@ import * as Haptics from 'expo-haptics';
 import React from 'react';
 import {
   ActivityIndicator,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -27,7 +28,9 @@ export function IOSButton({
   ...rest
 }: Props) {
   const handlePress = async (e: any) => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS !== 'web') {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
     onPress?.(e);
   };
 

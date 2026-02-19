@@ -24,7 +24,16 @@
         "ACCESS_COARSE_LOCATION"
       ]
     },
-    "web": {},
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "CareNearby",
+      "shortName": "CareNearby",
+      "lang": "en",
+      "themeColor": "#007AFF",
+      "backgroundColor": "#ffffff",
+      "description": "Find Personal Support Workers near you in Sudbury, Ontario"
+    },
     "plugins": [
       [
         "expo-location",
