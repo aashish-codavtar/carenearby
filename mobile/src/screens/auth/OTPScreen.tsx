@@ -156,7 +156,6 @@ export function OTPScreen({ route, navigation }: Props) {
             )}
           </View>
 
-          <Text style={styles.hint}>💡 Check the API server logs for the OTP in dev mode.</Text>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -210,12 +209,4 @@ const styles = StyleSheet.create({
   resendTimer: { fontSize: 15, color: Colors.secondaryLabel },
   resendCount: { fontWeight: '600', color: Colors.label },
   resendLink: { fontSize: 15, color: Colors.systemBlue, fontWeight: '500' },
-
-  hint: {
-    fontSize: 12,
-    color: Colors.tertiaryLabel,
-    textAlign: 'center',
-    paddingHorizontal: 16,
-    lineHeight: 18,
-  },
 });

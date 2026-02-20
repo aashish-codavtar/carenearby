@@ -35,9 +35,13 @@ const bookingSchema = new mongoose.Schema(
     },
     price: { type: Number, required: true }, // CAD, stored as 'price', exposed as 'totalPrice'
 
+    notes: { type: String, default: '', trim: true },   // special instructions from customer
+    ratingGiven: { type: Boolean, default: false },      // prevent duplicate ratings
+    cancelledBy: { type: String, enum: ['CUSTOMER', 'PSW', 'ADMIN'], default: null },
+
     paymentStatus: {
       type:    String,
-      enum:    ['PENDING', 'PAID', 'RELEASED'],
+      enum:    ['PENDING', 'PAID', 'RELEASED', 'REFUNDED', 'FAILED'],
       default: 'PENDING',
     },
     stripePaymentIntentId: { type: String, default: null },

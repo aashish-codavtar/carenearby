@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { apiRateBooking } from '../../api/client';
+import { apiCancelBooking, apiRateBooking } from '../../api/client';
 import { IOSButton } from '../../components/IOSButton';
 import { StatusBadge } from '../../components/StatusBadge';
 import { CustomerStackParams } from '../../navigation/CustomerNavigator';
@@ -17,10 +17,11 @@ import { Colors } from '../../utils/colors';
 type Props = NativeStackScreenProps<CustomerStackParams, 'BookingDetail'>;
 
 export function BookingDetailScreen({ route }: Props) {
-  const { booking } = route.params;
+  const [booking, setBooking] = useState(route.params.booking);
   const [rating, setRating] = useState(0);
-  const [rated, setRated] = useState(false);
+  const [ratingSubmitted, setRatingSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   const date = new Date(booking.scheduledAt);
   const dateStr = date.toLocaleDateString('en-CA', {
@@ -36,13 +37,38 @@ export function BookingDetailScreen({ route }: Props) {
     setLoading(true);
     try {
       await apiRateBooking({ bookingId: booking._id, rating });
-      setRated(true);
+      setRatingSubmitted(true);
       Alert.alert('Thank you!', 'Your rating has been submitted.');
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Could not submit rating.');
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleCancel() {
+    Alert.alert(
+      'Cancel Booking',
+      'Are you sure you want to cancel this booking? This cannot be undone.',
+      [
+        { text: 'Keep Booking', style: 'cancel' },
+        {
+          text: 'Cancel Booking',
+          style: 'destructive',
+          onPress: async () => {
+            setCancelLoading(true);
+            try {
+              const { booking: updated } = await apiCancelBooking(booking._id);
+              setBooking(updated);
+            } catch (e: any) {
+              Alert.alert('Error', e.message ?? 'Could not cancel booking.');
+            } finally {
+              setCancelLoading(false);
+            }
+          },
+        },
+      ],
+    );
   }
 
   return (
@@ -89,8 +115,20 @@ export function BookingDetailScreen({ route }: Props) {
           </View>
         )}
 
+        {/* Cancel booking */}
+        {(booking.status === 'REQUESTED' || booking.status === 'ACCEPTED') && (
+          <IOSButton
+            title="Cancel Booking"
+            onPress={handleCancel}
+            loading={cancelLoading}
+            variant="destructive"
+            size="medium"
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
         {/* Rating */}
-        {booking.status === 'COMPLETED' && !rated && (
+        {booking.status === 'COMPLETED' && !booking.ratingGiven && !ratingSubmitted && (
           <>
             <Text style={styles.sectionTitle}>Rate Your PSW</Text>
             <View style={styles.card}>
@@ -117,7 +155,7 @@ export function BookingDetailScreen({ route }: Props) {
           </>
         )}
 
-        {rated && (
+        {(booking.ratingGiven || ratingSubmitted) && (
           <View style={styles.ratedBanner}>
             <Text style={styles.ratedText}>⭐ Rating submitted — thank you!</Text>
           </View>

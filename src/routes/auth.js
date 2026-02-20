@@ -80,8 +80,9 @@ router.post(
       const user = await User.findOne({ phone });
       if (!user) return res.status(404).json({ error: 'User not found' });
 
-      if (!verifyOTP(phone, otp)) {
-        return res.status(400).json({ error: 'Invalid or expired OTP' });
+      const result = await verifyOTP(phone, otp);
+      if (!result.valid) {
+        return res.status(400).json({ error: result.error });
       }
 
       const token = jwt.sign(

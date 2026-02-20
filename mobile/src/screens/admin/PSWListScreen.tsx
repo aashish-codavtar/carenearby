@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Platform,
   RefreshControl,
   StyleSheet,
   Text,
@@ -10,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { PSWEntry, apiApprovePSW, apiGetPSWs } from '../../api/client';
+import { PSWEntry, apiApprovePSW, apiGetPSWs, apiRejectPSW } from '../../api/client';
 import { Colors } from '../../utils/colors';
 
 type Filter = 'ALL' | 'PENDING' | 'APPROVED';
@@ -27,6 +28,7 @@ export function PSWListScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -42,6 +44,40 @@ export function PSWListScreen() {
   }, [filter]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function doReject(id: string, reason?: string) {
+    setRejectingId(id);
+    try {
+      await apiRejectPSW(id, reason);
+      Alert.alert('Done', 'PSW application rejected.');
+      load();
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Could not reject.');
+    } finally {
+      setRejectingId(null);
+    }
+  }
+
+  function handleReject(psw: PSWEntry) {
+    if (Platform.OS === 'ios') {
+      Alert.prompt(
+        'Reject PSW',
+        `Reason for rejecting ${psw.name} (optional):`,
+        async (reason) => { await doReject(psw._id, reason || undefined); },
+        'plain-text',
+        '',
+      );
+    } else {
+      Alert.alert(
+        'Reject PSW',
+        `Reject ${psw.name}'s application?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Reject', style: 'destructive', onPress: () => doReject(psw._id) },
+        ],
+      );
+    }
+  }
 
   async function handleApprove(psw: PSWEntry) {
     Alert.alert(
@@ -103,21 +139,47 @@ export function PSWListScreen() {
         <View style={styles.cardFooter}>
           <View style={[styles.approvalBadge, { backgroundColor: isApproved ? `${Colors.systemGreen}1A` : `${Colors.systemOrange}1A` }]}>
             <Text style={[styles.approvalText, { color: isApproved ? Colors.systemGreen : Colors.systemOrange }]}>
-              {isApproved ? 'Approved' : 'Pending Approval'}
+              {isApproved ? 'Approved' : 'Pending'}
             </Text>
           </View>
-          {!isApproved && (
-            <TouchableOpacity
-              style={styles.approveBtn}
-              onPress={() => handleApprove(item)}
-              activeOpacity={0.8}
-              disabled={approvingId === item._id}
-            >
-              <Text style={styles.approveBtnText}>
-                {approvingId === item._id ? '...' : 'Approve'}
-              </Text>
-            </TouchableOpacity>
-          )}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {isApproved && (
+              <TouchableOpacity
+                style={styles.rejectBtn}
+                onPress={() => handleReject(item)}
+                activeOpacity={0.8}
+                disabled={rejectingId === item._id}
+              >
+                <Text style={styles.rejectBtnText}>
+                  {rejectingId === item._id ? '...' : 'Revoke'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {!isApproved && (
+              <TouchableOpacity
+                style={styles.rejectBtn}
+                onPress={() => handleReject(item)}
+                activeOpacity={0.8}
+                disabled={rejectingId === item._id || approvingId === item._id}
+              >
+                <Text style={styles.rejectBtnText}>
+                  {rejectingId === item._id ? '...' : 'Reject'}
+                </Text>
+              </TouchableOpacity>
+            )}
+            {!isApproved && (
+              <TouchableOpacity
+                style={styles.approveBtn}
+                onPress={() => handleApprove(item)}
+                activeOpacity={0.8}
+                disabled={approvingId === item._id || rejectingId === item._id}
+              >
+                <Text style={styles.approveBtnText}>
+                  {approvingId === item._id ? '...' : 'Approve'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
     );
@@ -246,6 +308,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   approveBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+
+  rejectBtn: {
+    backgroundColor: `${Colors.systemRed}1A`,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  rejectBtnText: { color: Colors.systemRed, fontSize: 14, fontWeight: '600' },
 
   empty: { alignItems: 'center', paddingTop: 60 },
   emptyIcon: { fontSize: 40, marginBottom: 12 },

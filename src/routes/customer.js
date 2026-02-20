@@ -4,8 +4,17 @@ const mongoose  = require('mongoose');
 
 const Booking               = require('../models/Booking');
 const User                  = require('../models/User');
+const PSWProfile            = require('../models/PSWProfile');
 const { authenticate, requireRole } = require('../middleware/auth');
 const validate              = require('../middleware/validate');
+
+const VALID_SERVICE_TYPES = [
+  'Personal Care',
+  'Companionship',
+  'Meal Preparation',
+  'Medication Reminders',
+  'Light Housekeeping',
+];
 
 const router = express.Router();
 
@@ -21,9 +30,13 @@ router.post(
   [
     body('serviceType')
       .trim()
-      .notEmpty().withMessage('serviceType is required'),
+      .isIn(VALID_SERVICE_TYPES).withMessage(`serviceType must be one of: ${VALID_SERVICE_TYPES.join(', ')}`),
     body('hours')
-      .isFloat({ min: 3 }).withMessage('hours must be at least 3'),
+      .isInt({ min: 3, max: 12 }).withMessage('hours must be a whole number between 3 and 12'),
+    body('notes')
+      .optional()
+      .trim()
+      .isLength({ max: 500 }).withMessage('notes must be 500 characters or fewer'),
     body('scheduledAt')
       .isISO8601().withMessage('scheduledAt must be a valid ISO 8601 date'),
     body('location.coordinates')
@@ -34,24 +47,27 @@ router.post(
   validate,
   async (req, res) => {
     try {
-      const { serviceType, hours, scheduledAt, location } = req.body;
+      const { serviceType, hours, scheduledAt, location, notes } = req.body;
 
-      const price = Math.round(hours * HOURLY_RATE() * 100) / 100; // round to 2 dp
+      const scheduledDate = new Date(scheduledAt);
+      if (scheduledDate <= new Date()) {
+        return res.status(400).json({ error: 'scheduledAt must be a future date' });
+      }
+
+      const price = Math.round(Number(hours) * HOURLY_RATE() * 100) / 100;
 
       const booking = await Booking.create({
         customerId: req.user._id,
         serviceType,
-        hours,
-        scheduledAt: new Date(scheduledAt),
+        hours:      Number(hours),
+        scheduledAt: scheduledDate,
         location: {
           type:        'Point',
-          coordinates: location.coordinates, // [lng, lat]
+          coordinates: location.coordinates,
         },
         price,
+        notes:         notes || '',
         paymentStatus: 'PENDING',
-        // Stripe (production): create paymentIntent here then set stripePaymentIntentId
-        // const intent = await stripe.paymentIntents.create({ amount: price*100, currency:'cad', ... });
-        // stripePaymentIntentId: intent.id,
       });
 
       res.status(201).json({ booking });
@@ -117,6 +133,10 @@ router.post(
         });
       }
 
+      if (booking.ratingGiven) {
+        return res.status(409).json({ error: 'You have already rated this booking.' });
+      }
+
       if (!booking.pswId) {
         return res.status(400).json({ error: 'No PSW assigned to this booking' });
       }
@@ -130,7 +150,96 @@ router.post(
       psw.rating        = Math.round((total / psw.ratingCount) * 10) / 10;
       await psw.save();
 
+      booking.ratingGiven = true;
+      await booking.save();
+
       res.json({ message: 'Rating submitted', newRating: psw.rating });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// ── PATCH /bookings/:id/cancel ────────────────────────────────────────────────
+// Customer cancels their own REQUESTED or ACCEPTED booking.
+router.patch(
+  '/bookings/:id/cancel',
+  authenticate,
+  requireRole('CUSTOMER'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({ error: 'Invalid booking ID' });
+      }
+
+      const booking = await Booking.findOneAndUpdate(
+        { _id: id, customerId: req.user._id, status: { $in: ['REQUESTED', 'ACCEPTED'] } },
+        { status: 'CANCELLED', paymentStatus: 'REFUNDED' },
+        { new: true }
+      ).populate('pswId', 'name phone');
+
+      if (!booking) {
+        return res.status(404).json({
+          error: 'Booking not found or cannot be cancelled once service has started.',
+        });
+      }
+
+      res.json({ message: 'Booking cancelled successfully', booking });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// ── PATCH /profile ────────────────────────────────────────────────────────────
+// Update the authenticated user's own profile fields.
+router.patch(
+  '/profile',
+  authenticate,
+  [
+    body('name').optional().trim().isLength({ min: 2, max: 80 }).withMessage('name must be 2–80 characters'),
+    body('email').optional().trim().isEmail().withMessage('invalid email'),
+    body('address').optional().trim().isLength({ max: 200 }).withMessage('address too long'),
+    body('emergencyContact.name').optional().trim().isLength({ max: 80 }),
+    body('emergencyContact.phone').optional().trim(),
+  ],
+  validate,
+  async (req, res) => {
+    try {
+      const allowed = ['name', 'email', 'address', 'emergencyContact'];
+      const updates = Object.fromEntries(
+        Object.entries(req.body).filter(([k]) => allowed.includes(k))
+      );
+
+      const user = await User.findByIdAndUpdate(req.user._id, updates, { new: true }).select('-__v');
+      res.json({ message: 'Profile updated', user });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// ── GET /profile ──────────────────────────────────────────────────────────────
+// Returns the authenticated user's own profile.
+// PSW users also receive their PSWProfile (includes availability status).
+router.get(
+  '/profile',
+  authenticate,
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.user._id).select('-__v -location').lean();
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      let pswProfile = null;
+      if (user.role === 'PSW') {
+        pswProfile = await PSWProfile.findOne({ userId: user._id }).select('-__v -_id -userId').lean();
+      }
+
+      res.json({ user, pswProfile });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Server error' });

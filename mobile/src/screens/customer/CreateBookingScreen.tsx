@@ -1,4 +1,5 @@
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { useNavigation } from '@react-navigation/native';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -7,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -35,11 +37,13 @@ function getDefaultDate(): Date {
 }
 
 export function CreateBookingScreen() {
+  const navigation = useNavigation();
   const [serviceType, setServiceType] = useState(SERVICE_TYPES[0].label);
   const [hours, setHours] = useState(3);
   const [scheduledDate, setScheduledDate] = useState<Date>(getDefaultDate());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
@@ -75,6 +79,7 @@ export function CreateBookingScreen() {
         hours,
         scheduledAt: scheduledDate.toISOString(),
         location: { coordinates: DEFAULT_COORDS },
+        notes: notes.trim() || undefined,
       });
       setSuccess(true);
     } catch (e: any) {
@@ -88,6 +93,7 @@ export function CreateBookingScreen() {
     setServiceType(SERVICE_TYPES[0].label);
     setHours(3);
     setScheduledDate(getDefaultDate());
+    setNotes('');
     setSuccess(false);
   }
 
@@ -111,7 +117,17 @@ export function CreateBookingScreen() {
           <Text style={styles.successSub}>
             Your request has been sent. A verified PSW near you will accept it shortly.
           </Text>
-          <IOSButton title="Book Another" onPress={handleReset} style={{ marginTop: 32 }} />
+          <IOSButton
+            title="View My Bookings"
+            onPress={() => navigation.navigate('BookingsTab' as never)}
+            style={{ marginTop: 32 }}
+          />
+          <IOSButton
+            title="Book Another"
+            onPress={handleReset}
+            variant="outline"
+            style={{ marginTop: 12 }}
+          />
         </View>
       </SafeAreaView>
     );
@@ -266,6 +282,20 @@ export function CreateBookingScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* Notes */}
+          <Text style={styles.label}>Special Instructions (optional)</Text>
+          <TextInput
+            style={styles.notesInput}
+            placeholder="Any special needs, access codes, allergies, etc."
+            placeholderTextColor={Colors.tertiaryLabel}
+            value={notes}
+            onChangeText={setNotes}
+            multiline
+            numberOfLines={3}
+            maxLength={500}
+            textAlignVertical="top"
+          />
+
           {/* Location note */}
           <View style={styles.locationNote}>
             <Text style={styles.locationIcon}>📍</Text>
@@ -368,6 +398,18 @@ const styles = StyleSheet.create({
   hoursDisplay: { alignItems: 'center', minWidth: 80 },
   hoursValue: { fontSize: 40, fontWeight: '700', color: Colors.label },
   hoursUnit: { fontSize: 13, color: Colors.secondaryLabel },
+
+  notesInput: {
+    backgroundColor: Colors.systemBackground,
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    color: Colors.label,
+    minHeight: 90,
+    marginBottom: 8,
+    borderWidth: 1.5,
+    borderColor: Colors.separator,
+  },
 
   locationNote: {
     flexDirection: 'row',

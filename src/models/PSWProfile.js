@@ -16,6 +16,8 @@ const pswProfileSchema = new mongoose.Schema(
     },
     availability:    { type: Boolean, default: true },
     approvedByAdmin: { type: Boolean, default: false },
+    rejectionReason: { type: String, default: '' },
+    bio:             { type: String, default: '', trim: true },
   },
   { timestamps: true }
 );

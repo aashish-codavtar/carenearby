@@ -67,6 +67,7 @@ export function apiCreateBooking(payload: {
   hours: number;
   scheduledAt: string;
   location: { coordinates: [number, number] };
+  notes?: string;
 }) {
   return request<{ booking: Booking }>('POST', '/bookings', payload);
 }
@@ -76,15 +77,35 @@ export function apiMyBookings() {
 }
 
 export function apiRateBooking(payload: { bookingId: string; rating: number }) {
-  return request<{ message: string }>('POST', '/ratings', payload);
+  return request<{ message: string; newRating: number }>('POST', '/ratings', payload);
+}
+
+export function apiCancelBooking(id: string) {
+  return request<{ message: string; booking: Booking }>('PATCH', `/bookings/${id}/cancel`);
+}
+
+export function apiGetProfile() {
+  return request<{ user: UserProfile; pswProfile: PSWProfileData | null }>('GET', '/profile');
+}
+
+export function apiUpdateProfile(payload: {
+  name?: string;
+  email?: string;
+  address?: string;
+  emergencyContact?: { name: string; phone: string };
+}) {
+  return request<{ message: string; user: UserProfile }>('PATCH', '/profile', payload);
 }
 
 // ─── PSW ──────────────────────────────────────────────────────────────────────
 
-// Optionally pass current GPS coords so the backend updates PSW location atomically
 export function apiNearbyJobs(coords?: { lat: number; lng: number }) {
   const qs = coords ? `?lat=${coords.lat}&lng=${coords.lng}` : '';
   return request<{ bookings: Booking[] }>('GET', `/jobs/nearby${qs}`);
+}
+
+export function apiMyJobs() {
+  return request<{ bookings: Booking[] }>('GET', '/jobs/my');
 }
 
 export function apiAcceptJob(id: string) {
@@ -99,6 +120,10 @@ export function apiCompleteJob(id: string) {
   return request<{ booking: Booking }>('POST', `/jobs/${id}/complete`);
 }
 
+export function apiSetAvailability(available: boolean) {
+  return request<{ message: string; availability: boolean }>('PATCH', '/jobs/availability', { available });
+}
+
 // ─── Admin ────────────────────────────────────────────────────────────────────
 
 export function apiGetPSWs(approved?: boolean) {
@@ -110,13 +135,17 @@ export function apiApprovePSW(id: string) {
   return request<{ message: string }>('POST', `/admin/psws/${id}/approve`);
 }
 
+export function apiRejectPSW(id: string, reason?: string) {
+  return request<{ message: string }>('POST', `/admin/psws/${id}/reject`, { reason });
+}
+
 export function apiGetAllBookings(params?: { status?: string; page?: number; limit?: number }) {
   const qs = new URLSearchParams();
   if (params?.status) qs.set('status', params.status);
   if (params?.page) qs.set('page', String(params.page));
   if (params?.limit) qs.set('limit', String(params.limit));
   const q = qs.toString();
-  return request<{ bookings: Booking[]; total: number }>('GET', `/admin/bookings${q ? `?${q}` : ''}`);
+  return request<{ bookings: Booking[]; total: number; pages: number }>('GET', `/admin/bookings${q ? `?${q}` : ''}`);
 }
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
@@ -131,7 +160,9 @@ export interface Booking {
   location: { coordinates: [number, number] };
   status: 'REQUESTED' | 'ACCEPTED' | 'STARTED' | 'COMPLETED' | 'CANCELLED';
   totalPrice: number;
-  paymentStatus: string;
+  paymentStatus: 'PENDING' | 'PAID' | 'RELEASED' | 'REFUNDED' | 'FAILED';
+  notes?: string;
+  ratingGiven?: boolean;
   createdAt: string;
   distanceKm?: number;
 }
@@ -148,5 +179,28 @@ export interface PSWEntry {
     availability: boolean;
     certifications: string[];
     experienceYears: number;
+    rejectionReason?: string;
+    bio?: string;
   };
+}
+
+export interface PSWProfileData {
+  availability: boolean;
+  approvedByAdmin: boolean;
+  certifications: string[];
+  experienceYears: number;
+  rejectionReason?: string;
+  bio?: string;
+}
+
+export interface UserProfile {
+  _id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  address?: string;
+  role: string;
+  rating: number;
+  ratingCount: number;
+  emergencyContact?: { name: string; phone: string };
 }

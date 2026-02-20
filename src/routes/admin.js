@@ -84,6 +84,41 @@ router.post(
   }
 );
 
+// ── POST /admin/psws/:id/reject ───────────────────────────────────────────────
+// Reject (or de-approve) a PSW with an optional reason.
+router.post(
+  '/psws/:id/reject',
+  authenticate,
+  requireRole('ADMIN'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({ error: 'Invalid PSW ID' });
+      }
+
+      const user = await User.findOne({ _id: id, role: 'PSW' });
+      if (!user) return res.status(404).json({ error: 'PSW user not found' });
+
+      await PSWProfile.findOneAndUpdate(
+        { userId: id },
+        { approvedByAdmin: false, rejectionReason: reason || 'Application not approved.' },
+        { upsert: true, new: true }
+      );
+
+      user.isVerified = false;
+      await user.save();
+
+      res.json({ message: 'PSW rejected', reason: reason || 'Application not approved.' });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
 // ── GET /admin/bookings ───────────────────────────────────────────────────────
 // List all bookings with pagination. Optional filter: ?status=REQUESTED|ACCEPTED|...
 router.get(

@@ -81,6 +81,16 @@ export function JobDetailScreen({ route, navigation }: Props) {
           <InfoRow icon="📍" label="Location" value="Greater Sudbury Area" />
         </View>
 
+        {/* Notes from customer */}
+        {job.notes ? (
+          <>
+            <Text style={styles.sectionTitle}>Customer Notes</Text>
+            <View style={[styles.card, styles.notesPad]}>
+              <Text style={styles.notesText}>{job.notes}</Text>
+            </View>
+          </>
+        ) : null}
+
         {/* Customer info */}
         <Text style={styles.sectionTitle}>Customer</Text>
         <View style={styles.card}>
@@ -90,6 +100,9 @@ export function JobDetailScreen({ route, navigation }: Props) {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.customerName}>{job.customer?.name ?? '—'}</Text>
+              {(job.status === 'ACCEPTED' || job.status === 'STARTED') && job.customer?.phone && (
+                <Text style={styles.customerPhone}>{job.customer.phone}</Text>
+              )}
               {customerRating !== undefined && customerRating > 0 && (
                 <View style={styles.ratingRow}>
                   <Text style={styles.ratingStar}>⭐</Text>
@@ -195,6 +208,9 @@ const styles = StyleSheet.create({
   },
   avatarText: { color: '#fff', fontSize: 20, fontWeight: '700' },
   customerName: { fontSize: 16, fontWeight: '600', color: Colors.label },
+  customerPhone: { fontSize: 13, color: Colors.secondaryLabel, marginTop: 1 },
+  notesPad: { padding: 14 },
+  notesText: { fontSize: 15, color: Colors.label, lineHeight: 22 },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   ratingStar: { fontSize: 12 },
   ratingText: { fontSize: 13, color: Colors.secondaryLabel },

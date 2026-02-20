@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { apiGetProfile, apiSetAvailability } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { Colors } from '../../utils/colors';
 
@@ -31,6 +33,30 @@ const ROLE_ICONS: Record<string, string> = {
 
 export function ProfileScreen() {
   const { user, signOut } = useAuth();
+  const [availability, setAvailability] = useState<boolean | null>(null);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+
+  useEffect(() => {
+    if (user?.role === 'PSW') {
+      apiGetProfile()
+        .then(({ pswProfile }) => {
+          if (pswProfile != null) setAvailability(pswProfile.availability);
+        })
+        .catch(() => {});
+    }
+  }, [user?.role]);
+
+  async function handleAvailabilityToggle(value: boolean) {
+    setAvailabilityLoading(true);
+    try {
+      await apiSetAvailability(value);
+      setAvailability(value);
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Could not update availability.');
+    } finally {
+      setAvailabilityLoading(false);
+    }
+  }
 
   function handleSignOut() {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -69,6 +95,27 @@ export function ProfileScreen() {
           <Divider />
           <InfoRow label="Role" value={ROLE_LABELS[user?.role ?? ''] ?? '—'} icon="👤" />
         </View>
+
+        {/* PSW Availability */}
+        {user?.role === 'PSW' && availability !== null && (
+          <View style={styles.card}>
+            <View style={styles.availabilityRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.availabilityLabel}>Available for Jobs</Text>
+                <Text style={styles.availabilityHint}>
+                  {availability ? 'You appear in nearby job listings' : 'Hidden from job listings'}
+                </Text>
+              </View>
+              <Switch
+                value={availability}
+                onValueChange={handleAvailabilityToggle}
+                disabled={availabilityLoading}
+                trackColor={{ false: Colors.systemGray4, true: Colors.systemGreen }}
+                thumbColor="#fff"
+              />
+            </View>
+          </View>
+        )}
 
         {/* App info */}
         <View style={styles.card}>
@@ -156,6 +203,15 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   signOutText: { fontSize: 16, fontWeight: '600', color: Colors.systemRed },
+
+  availabilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    gap: 12,
+  },
+  availabilityLabel: { fontSize: 15, fontWeight: '600', color: Colors.label },
+  availabilityHint: { fontSize: 13, color: Colors.secondaryLabel, marginTop: 2 },
 
   footer: { fontSize: 12, color: Colors.tertiaryLabel, textAlign: 'center' },
 });

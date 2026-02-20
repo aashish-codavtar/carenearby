@@ -206,4 +206,56 @@ router.post(
   }
 );
 
+// ── PATCH /jobs/availability ──────────────────────────────────────────────────
+// Toggle PSW availability on/off.
+router.patch(
+  '/availability',
+  authenticate,
+  requireRole('PSW'),
+  async (req, res) => {
+    try {
+      const { available } = req.body;
+      if (typeof available !== 'boolean') {
+        return res.status(400).json({ error: 'available must be true or false' });
+      }
+
+      const profile = await PSWProfile.findOneAndUpdate(
+        { userId: req.user._id },
+        { availability: available },
+        { new: true }
+      );
+
+      if (!profile) return res.status(404).json({ error: 'PSW profile not found' });
+
+      res.json({ message: `Availability set to ${available}`, availability: available });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// ── GET /jobs/my ──────────────────────────────────────────────────────────────
+// List all jobs this PSW has accepted/started/completed.
+router.get(
+  '/my',
+  authenticate,
+  requireRole('PSW'),
+  async (req, res) => {
+    try {
+      const bookings = await Booking.find({
+        pswId:  req.user._id,
+        status: { $in: ['ACCEPTED', 'STARTED', 'COMPLETED'] },
+      })
+        .sort({ createdAt: -1 })
+        .populate('customerId', 'name phone rating address');
+
+      res.json({ bookings });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
 module.exports = router;
