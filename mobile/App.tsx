@@ -11,7 +11,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <NavigationContainer>
+        <NavigationContainer documentTitle={{ formatter: () => 'CareNearby' }}>
           <View style={styles.root}>
             <StatusBar style="dark" />
             <RootNavigator />

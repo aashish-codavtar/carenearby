@@ -75,7 +75,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-const DIVIDER = <View style={styles.divider} />;
+function Divider() { return <View style={styles.divider} />; }
 
 export function ProfileScreen() {
   const { user, signOut } = useAuth();
@@ -213,9 +213,9 @@ export function ProfileScreen() {
           <View style={styles.verifiedRow}>
             <VerifiedChip label="OTP Verified" />
           </View>
-          {DIVIDER}
+          <Divider />
           <InfoRow icon="🔑" label="Account ID" value={accountId} />
-          {DIVIDER}
+          <Divider />
           <InfoRow icon={roleIcon} label="Role" value={roleLabel} />
         </Section>
 
@@ -229,17 +229,17 @@ export function ProfileScreen() {
 
             {pswP ? (
               <>
-                {DIVIDER}
+                <Divider />
                 {pswP.experienceYears > 0 && (
                   <>
                     <InfoRow icon="🏅" label="Experience" value={`${pswP.experienceYears} years`} />
-                    {DIVIDER}
+                    <Divider />
                   </>
                 )}
                 {(pswP.languages?.length ?? 0) > 0 && (
                   <>
                     <InfoRow icon="🌐" label="Languages" value={pswP.languages!.join(' · ')} />
-                    {DIVIDER}
+                    <Divider />
                   </>
                 )}
                 {(pswP.specialties?.length ?? 0) > 0 && (
@@ -259,7 +259,7 @@ export function ProfileScreen() {
                         )}
                       </View>
                     </View>
-                    {DIVIDER}
+                    <Divider />
                   </>
                 )}
                 <View style={styles.checkGrid}>
@@ -347,7 +347,7 @@ export function ProfileScreen() {
               { icon: '⭐', label: 'Rating System',    desc: '1–5 stars after every session' },
             ].map((t, i) => (
               <View key={t.label}>
-                {i > 0 && DIVIDER}
+                {i > 0 && <Divider />}
                 <View style={styles.trustRow}>
                   <View style={styles.trustIconWrap}><Text style={styles.trustIcon}>{t.icon}</Text></View>
                   <View style={{ flex: 1 }}>
@@ -383,11 +383,11 @@ export function ProfileScreen() {
         {/* ── App Info ──────────────────────────────────────────────── */}
         <Section title="App Info">
           <InfoRow icon="📦" label="Version" value={`v${appVersion}`} />
-          {DIVIDER}
+          <Divider />
           <InfoRow icon="🗺️" label="Region" value="Greater Sudbury, ON 🇨🇦" />
-          {DIVIDER}
+          <Divider />
           <InfoRow icon="📍" label="Coverage" value="15 km radius" />
-          {DIVIDER}
+          <Divider />
           <InfoRow
             icon="✉️" label="Support" value="support@carenearby.ca"
             valueColor="#007AFF"
