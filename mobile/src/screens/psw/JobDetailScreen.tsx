@@ -36,26 +36,34 @@ export function JobDetailScreen() {
     label: string,
     fn: () => Promise<{ booking: Booking }>,
   ) {
+    const doAction = async () => {
+      setLoading(true);
+      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      try {
+        const { booking } = await fn();
+        setJob(booking);
+        if (booking.status === 'COMPLETED') {
+          if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+      } catch (e: any) {
+        if (Platform.OS === 'web') {
+          // eslint-disable-next-line no-alert
+          alert(e.message || 'Something went wrong.');
+        } else {
+          Alert.alert('Error', e.message || 'Something went wrong.');
+        }
+      }
+      setLoading(false);
+    };
+
+    if (Platform.OS === 'web') {
+      // eslint-disable-next-line no-alert
+      if (confirm(`${label} — Are you sure?`)) doAction();
+      return;
+    }
     Alert.alert(label, `Are you sure you want to ${label.toLowerCase()}?`, [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: label,
-        style: label === 'Cancel Job' ? 'destructive' : 'default',
-        onPress: async () => {
-          setLoading(true);
-          if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          try {
-            const { booking } = await fn();
-            setJob(booking);
-            if (booking.status === 'COMPLETED') {
-              if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            }
-          } catch (e: any) {
-            Alert.alert('Error', e.message || 'Something went wrong.');
-          }
-          setLoading(false);
-        },
-      },
+      { text: label, style: label === 'Cancel Job' ? 'destructive' : 'default', onPress: doAction },
     ]);
   }
 
@@ -137,6 +145,20 @@ export function JobDetailScreen() {
             </MapView>
             <Pressable style={styles.mapOpenBtn} onPress={openMaps}>
               <Text style={styles.mapOpenBtnText}>Open in Maps →</Text>
+            </Pressable>
+          </View>
+        ) : lat !== 0 ? (
+          /* Web: real embedded OpenStreetMap */
+          <View style={styles.mapCard}>
+            {/* @ts-ignore – iframe is valid on web */}
+            <iframe
+              src={`https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.015},${lat - 0.015},${lng + 0.015},${lat + 0.015}&layer=mapnik&marker=${lat},${lng}`}
+              style={{ width: '100%', height: 200, border: 'none', display: 'block' } as any}
+              title="Job Location Map"
+              loading="lazy"
+            />
+            <Pressable style={styles.mapOpenBtn} onPress={openMaps}>
+              <Text style={styles.mapOpenBtnText}>Open in Google Maps →</Text>
             </Pressable>
           </View>
         ) : (

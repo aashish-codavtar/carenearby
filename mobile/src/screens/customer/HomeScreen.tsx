@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -46,6 +47,9 @@ export function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  const [showInstall, setShowInstall] = useState(false);
+
   const activeBooking = bookings.find(b => ACTIVE_STATUSES.has(b.status));
   const recentBookings = bookings.filter(b => !ACTIVE_STATUSES.has(b.status)).slice(0, 3);
 
@@ -59,6 +63,19 @@ export function HomeScreen() {
     setLoading(false);
     setRefreshing(false);
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const handler = (e: any) => { e.preventDefault(); setInstallPrompt(e); setShowInstall(true); };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  function installApp() {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    installPrompt.userChoice.then(() => { setInstallPrompt(null); setShowInstall(false); });
+  }
 
   useEffect(() => {
     load();
@@ -135,6 +152,24 @@ export function HomeScreen() {
           ))}
         </View>
       </LinearGradient>
+
+      {/* ── PWA Install Banner (web only) ────────────────────────── */}
+      {showInstall && (
+        <View style={styles.installBanner}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.installTitle}>📲 Add CareNearby to Home Screen</Text>
+            <Text style={styles.installSub}>Install the app for faster access, offline use, and notifications</Text>
+          </View>
+          <View style={styles.installActions}>
+            <Pressable style={styles.installBtn} onPress={installApp}>
+              <Text style={styles.installBtnText}>Install</Text>
+            </Pressable>
+            <Pressable onPress={() => setShowInstall(false)} style={styles.installDismiss}>
+              <Text style={styles.installDismissText}>✕</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
 
       {/* ── Active Booking Banner ─────────────────────────────────── */}
       {activeBooking && (
@@ -365,4 +400,21 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 44, marginBottom: 14 },
   emptyTitle: { fontSize: 17, fontWeight: '700', color: Colors.label, marginBottom: 6 },
   emptySub: { fontSize: 14, color: Colors.secondaryLabel, textAlign: 'center', lineHeight: 20 },
+
+  // PWA install banner
+  installBanner: {
+    marginHorizontal: 16, marginTop: 16, marginBottom: 4,
+    backgroundColor: Colors.heroNavy, borderRadius: 18, padding: 16,
+    flexDirection: 'column', gap: 12,
+    shadowColor: Colors.heroNavy,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
+  },
+  installTitle: { fontSize: 14, fontWeight: '800', color: '#fff', marginBottom: 3 },
+  installSub: { fontSize: 12, color: 'rgba(255,255,255,0.65)', lineHeight: 16 },
+  installActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  installBtn: { backgroundColor: Colors.systemBlue, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },
+  installBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  installDismiss: { padding: 8 },
+  installDismissText: { color: 'rgba(255,255,255,0.5)', fontSize: 16 },
 });

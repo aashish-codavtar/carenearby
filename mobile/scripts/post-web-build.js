@@ -132,7 +132,33 @@ if (fs.existsSync(iconSrc192) && fs.existsSync(iconSrc512)) {
   }
 }
 
-// ── 4. Write vercel.json with SPA rewrite ────────────────────────────────────
+// ── 4. Copy service worker ────────────────────────────────────────────────────
+const swSrc = path.join(WEB, 'sw.js');
+const swDst = path.join(DIST, 'sw.js');
+if (fs.existsSync(swSrc)) {
+  fs.copyFileSync(swSrc, swDst);
+  console.log('✔ Copied sw.js to dist/');
+
+  // Inject SW registration script just before </body>
+  let html2 = fs.readFileSync(indexPath, 'utf8');
+  const SW_SCRIPT = `
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  </script>`;
+  if (!html2.includes('serviceWorker')) {
+    html2 = html2.replace('</body>', `${SW_SCRIPT}\n</body>`);
+    fs.writeFileSync(indexPath, html2);
+    console.log('✔ Injected service worker registration into index.html');
+  }
+} else {
+  console.warn('⚠  web/sw.js not found – skipping service worker');
+}
+
+// ── 5. Write vercel.json with SPA rewrite ────────────────────────────────────
 const vercelConfig = {
   rewrites: [{ source: '/(.*)', destination: '/' }],
 };

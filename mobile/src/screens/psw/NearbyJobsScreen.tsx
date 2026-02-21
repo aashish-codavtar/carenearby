@@ -16,11 +16,88 @@ import * as Location from 'expo-location';
 import { apiNearbyJobs, Booking } from '../../api/client';
 import { JobCard } from '../../components/JobCard';
 import { JobCardSkeleton } from '../../components/SkeletonLoader';
-import { Colors } from '../../utils/colors';
+import { Colors, ServiceIcons } from '../../utils/colors';
 
 // react-native-maps doesn't support web
 const MapView = Platform.OS !== 'web' ? require('react-native-maps').default : null;
 const Marker  = Platform.OS !== 'web' ? require('react-native-maps').Marker  : null;
+
+// ── Leaflet map for web ───────────────────────────────────────────────────────
+declare global { interface Window { L: any } }
+
+function loadLeaflet(): Promise<void> {
+  return new Promise(resolve => {
+    if (typeof window === 'undefined') { resolve(); return; }
+    if (window.L) { resolve(); return; }
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.onload = () => resolve();
+    document.head.appendChild(script);
+  });
+}
+
+interface WebLeafletProps {
+  center: { lat: number; lng: number };
+  jobs: Booking[];
+  onJobPress: (job: Booking) => void;
+}
+
+function WebLeafletMap({ center, jobs, onJobPress }: WebLeafletProps) {
+  const containerRef = useRef<any>(null);
+  const mapRef = useRef<any>(null);
+
+  useEffect(() => {
+    loadLeaflet().then(() => {
+      if (!containerRef.current || mapRef.current) return;
+      const L = window.L;
+      const map = L.map(containerRef.current).setView([center.lat, center.lng], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://openstreetmap.org">OSM</a>',
+        maxZoom: 19,
+      }).addTo(map);
+
+      // PSW location marker (green)
+      const greenIcon = L.divIcon({ html: '<div style="background:#10B981;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)"></div>', className: '' });
+      L.marker([center.lat, center.lng], { icon: greenIcon }).addTo(map).bindPopup('📍 Your Location');
+
+      // Job markers
+      jobs.forEach(job => {
+        const [lng, lat] = job.location?.coordinates ?? [0, 0];
+        if (!lat || !lng) return;
+        const icon = ServiceIcons[job.serviceType] ?? '🏥';
+        const jobIcon = L.divIcon({ html: `<div style="background:#0A2540;color:#fff;border-radius:12px;padding:4px 8px;font-size:12px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.3)">${icon} $${job.totalPrice}</div>`, className: '' });
+        const marker = L.marker([lat, lng], { icon: jobIcon }).addTo(map);
+        marker.bindPopup(`<b>${job.serviceType}</b><br>$${job.totalPrice} · ${job.hours}h<br><a href="#" onclick="return false;" id="job-${job._id}">View Details →</a>`);
+        marker.on('popupopen', () => {
+          setTimeout(() => {
+            const el = document.getElementById(`job-${job._id}`);
+            if (el) el.onclick = () => { onJobPress(job); return false; };
+          }, 100);
+        });
+      });
+
+      mapRef.current = map;
+    });
+    return () => {
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <View style={styles.mapContainer}>
+      {/* @ts-ignore – ref to real DOM div on web */}
+      <div ref={containerRef} style={{ width: '100%', flex: 1 }} />
+      <View style={styles.mapOverlay}>
+        <Text style={styles.mapOverlayText}>{jobs.length} jobs · tap a pin for details</Text>
+      </View>
+    </View>
+  );
+}
 
 type LocationStatus = 'checking' | 'ok' | 'denied';
 type ViewMode = 'list' | 'map';
@@ -68,6 +145,12 @@ export function NearbyJobsScreen() {
     })();
   }, [load]);
 
+  // Auto-refresh every 15s so PSWs see new bookings without manually pulling
+  useEffect(() => {
+    const timer = setInterval(() => load(), 15_000);
+    return () => clearInterval(timer);
+  }, [load]);
+
   const totalEarnings = jobs.reduce((s, j) => s + j.totalPrice, 0);
 
   return (
@@ -83,15 +166,13 @@ export function NearbyJobsScreen() {
             <Text style={styles.headerSub}>{jobs.length} available near you</Text>
           </View>
           <View style={styles.headerRight}>
-            {/* List / Map toggle — only on native where MapView works */}
-            {Platform.OS !== 'web' && (
-              <Pressable
-                style={styles.viewToggle}
-                onPress={() => setViewMode(v => v === 'list' ? 'map' : 'list')}
-              >
-                <Text style={styles.viewToggleText}>{viewMode === 'list' ? '🗺 Map' : '≡ List'}</Text>
-              </Pressable>
-            )}
+            {/* List / Map toggle */}
+            <Pressable
+              style={styles.viewToggle}
+              onPress={() => setViewMode(v => v === 'list' ? 'map' : 'list')}
+            >
+              <Text style={styles.viewToggleText}>{viewMode === 'list' ? '🗺 Map' : '≡ List'}</Text>
+            </Pressable>
             <View style={styles.locationBadge}>
               <Text style={styles.locationBadgeText}>
                 {locationStatus === 'ok' ? '📍 Live' : '📍 Sudbury'}
@@ -127,7 +208,16 @@ export function NearbyJobsScreen() {
         )}
       </LinearGradient>
 
-      {/* Map view (native only) */}
+      {/* Map view – web: Leaflet via CDN */}
+      {viewMode === 'map' && Platform.OS === 'web' && (
+        <WebLeafletMap
+          center={coordsRef.current ?? { lat: SUDBURY_CENTER.latitude, lng: SUDBURY_CENTER.longitude }}
+          jobs={jobs}
+          onJobPress={job => nav.navigate('JobDetail', { job })}
+        />
+      )}
+
+      {/* Map view – native: react-native-maps */}
       {viewMode === 'map' && Platform.OS !== 'web' && MapView && (
         <View style={styles.mapContainer}>
           <MapView

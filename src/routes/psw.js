@@ -51,7 +51,8 @@ router.get(
       }
 
       const pswUser    = await User.findById(req.user._id).lean();
-      const [pswLng, pswLat] = pswUser.location.coordinates;
+      // Fall back to Sudbury city centre if location hasn't been set yet
+      const [pswLng, pswLat] = pswUser.location?.coordinates ?? [-80.9930, 46.4917];
 
       // $geoNear must be the first stage in an aggregation pipeline
       const bookings = await Booking.aggregate([
