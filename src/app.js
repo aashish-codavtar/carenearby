@@ -13,6 +13,10 @@ const adminRoutes    = require('./routes/admin');
 
 const app = express();
 
+// Trust Railway / Vercel / nginx proxy — required for express-rate-limit to
+// correctly read the client IP from X-Forwarded-For behind a reverse proxy.
+app.set('trust proxy', 1);
+
 // ── Security middleware ────────────────────────────────────────────────────────
 app.use(helmet());   // Sets secure HTTP response headers
 

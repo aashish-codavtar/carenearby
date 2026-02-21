@@ -27,6 +27,19 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    gender: {
+      type: String,
+      enum: ['M', 'F', 'NB', 'prefer_not_to_say', null],
+      default: null,
+    },
+    preferredLanguage: {
+      type: String,
+      default: 'English',
+    },
+    dateOfBirth: {
+      type: Date,
+      default: null,
+    },
     // GeoJSON Point – [longitude, latitude]
     location: {
       type:        { type: String, enum: ['Point'], default: 'Point' },
@@ -40,6 +53,8 @@ const userSchema = new mongoose.Schema(
     rating:      { type: Number, default: 0, min: 0, max: 5 },
     ratingCount: { type: Number, default: 0 },
     isVerified:  { type: Boolean, default: false },
+    // PSW onboarding completion flag
+    onboardingComplete: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

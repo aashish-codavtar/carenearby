@@ -1,217 +1,284 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
+  Image,
+  Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { apiGetProfile, apiSetAvailability } from '../../api/client';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
+import * as Linking from 'expo-linking';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { Colors } from '../../utils/colors';
+import { IOSButton } from '../../components/IOSButton';
 
-const ROLE_LABELS: Record<string, string> = {
-  CUSTOMER: 'Customer',
-  PSW: 'Personal Support Worker',
-  ADMIN: 'Administrator',
+const ROLE_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
+  CUSTOMER: { label: 'Client',         icon: '🏥', color: Colors.systemBlue },
+  PSW:      { label: 'PSW Worker',     icon: '🧑‍⚕️', color: Colors.onlineGreen },
+  ADMIN:    { label: 'Administrator',  icon: '⚙️', color: Colors.systemPurple },
 };
 
-const ROLE_COLORS: Record<string, string> = {
-  CUSTOMER: Colors.systemBlue,
-  PSW: Colors.systemGreen,
-  ADMIN: Colors.systemPurple,
-};
-
-const ROLE_ICONS: Record<string, string> = {
-  CUSTOMER: '👨‍👩‍👧',
-  PSW: '🧑‍⚕️',
-  ADMIN: '🛡️',
-};
-
-export function ProfileScreen() {
-  const { user, signOut } = useAuth();
-  const [availability, setAvailability] = useState<boolean | null>(null);
-  const [availabilityLoading, setAvailabilityLoading] = useState(false);
-
-  useEffect(() => {
-    if (user?.role === 'PSW') {
-      apiGetProfile()
-        .then(({ pswProfile }) => {
-          if (pswProfile != null) setAvailability(pswProfile.availability);
-        })
-        .catch(() => {});
-    }
-  }, [user?.role]);
-
-  async function handleAvailabilityToggle(value: boolean) {
-    setAvailabilityLoading(true);
-    try {
-      await apiSetAvailability(value);
-      setAvailability(value);
-    } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Could not update availability.');
-    } finally {
-      setAvailabilityLoading(false);
-    }
-  }
-
-  function handleSignOut() {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: signOut },
-    ]);
-  }
-
-  const roleColor = ROLE_COLORS[user?.role ?? 'CUSTOMER'];
-  const roleIcon = ROLE_ICONS[user?.role ?? 'CUSTOMER'];
-
-  return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.pageTitle}>Profile</Text>
-
-        {/* Avatar + name */}
-        <View style={styles.avatarSection}>
-          <View style={[styles.avatar, { backgroundColor: roleColor }]}>
-            <Text style={styles.avatarText}>{user?.name?.[0]?.toUpperCase() ?? '?'}</Text>
-          </View>
-          <Text style={styles.name}>{user?.name}</Text>
-          <View style={[styles.roleBadge, { backgroundColor: `${roleColor}1A` }]}>
-            <Text style={styles.roleIcon}>{roleIcon}</Text>
-            <Text style={[styles.roleText, { color: roleColor }]}>
-              {ROLE_LABELS[user?.role ?? ''] ?? user?.role}
-            </Text>
-          </View>
-        </View>
-
-        {/* Info card */}
-        <View style={styles.card}>
-          <InfoRow label="Phone" value={user?.phone ?? '—'} icon="📱" />
-          <Divider />
-          <InfoRow label="Account ID" value={user?.id ? `…${user.id.slice(-8)}` : '—'} icon="🔑" />
-          <Divider />
-          <InfoRow label="Role" value={ROLE_LABELS[user?.role ?? ''] ?? '—'} icon="👤" />
-        </View>
-
-        {/* PSW Availability */}
-        {user?.role === 'PSW' && availability !== null && (
-          <View style={styles.card}>
-            <View style={styles.availabilityRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.availabilityLabel}>Available for Jobs</Text>
-                <Text style={styles.availabilityHint}>
-                  {availability ? 'You appear in nearby job listings' : 'Hidden from job listings'}
-                </Text>
-              </View>
-              <Switch
-                value={availability}
-                onValueChange={handleAvailabilityToggle}
-                disabled={availabilityLoading}
-                trackColor={{ false: Colors.systemGray4, true: Colors.systemGreen }}
-                thumbColor="#fff"
-              />
-            </View>
-          </View>
-        )}
-
-        {/* App info */}
-        <View style={styles.card}>
-          <InfoRow label="App Version" value="1.0.0" icon="📦" />
-          <Divider />
-          <InfoRow label="Region" value="Sudbury, ON 🇨🇦" icon="📍" />
-          <Divider />
-          <InfoRow label="Support" value="support@carenearby.ca" icon="💬" />
-        </View>
-
-        {/* Sign out */}
-        <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut} activeOpacity={0.8}>
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.footer}>CareNearby · © 2024 · Sudbury, Ontario</Text>
-      </ScrollView>
-    </SafeAreaView>
-  );
+interface InfoRowProps {
+  label: string;
+  value: string;
+  icon?: string;
 }
 
-function InfoRow({ label, value, icon }: { label: string; value: string; icon: string }) {
+function InfoRow({ label, value, icon }: InfoRowProps) {
   return (
-    <View style={infoRowStyles.row}>
-      <Text style={infoRowStyles.icon}>{icon}</Text>
-      <Text style={infoRowStyles.label}>{label}</Text>
-      <Text style={infoRowStyles.value} numberOfLines={1}>{value}</Text>
+    <View style={styles.infoRow}>
+      <View style={styles.infoRowLeft}>
+        {icon && <Text style={styles.infoRowIcon}>{icon}</Text>}
+        <Text style={styles.infoRowLabel}>{label}</Text>
+      </View>
+      <Text style={styles.infoRowValue} numberOfLines={1}>{value}</Text>
     </View>
   );
 }
 
-function Divider() {
-  return <View style={infoRowStyles.divider} />;
+export function ProfileScreen() {
+  const { user, signOut } = useAuth();
+  const insets = useSafeAreaInsets();
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+
+  const roleConfig = ROLE_CONFIG[user?.role ?? ''] ?? { label: user?.role ?? '', icon: '👤', color: Colors.systemGray };
+  const appVersion = Constants.expoConfig?.version ?? '1.0.0';
+
+  async function pickPhoto() {
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Needed', 'Please allow photo access in Settings to upload a profile photo.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        setPhotoUri(result.assets[0].uri);
+        // TODO: upload to backend via apiUpdateProfile({ photoUrl: uploadedUrl })
+      }
+    } catch {}
+  }
+
+  async function takePhoto() {
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Needed', 'Please allow camera access in Settings to take a profile photo.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        setPhotoUri(result.assets[0].uri);
+      }
+    } catch {}
+  }
+
+  function showPhotoOptions() {
+    Alert.alert('Profile Photo', 'Choose how to update your photo', [
+      { text: '📷 Take Photo', onPress: takePhoto },
+      { text: '🖼 Choose from Library', onPress: pickPhoto },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
+
+  function handleSignOut() {
+    if (Platform.OS === 'web') {
+      // eslint-disable-next-line no-restricted-globals
+      if (confirm('Are you sure you want to sign out of CareNearby?')) {
+        signOut();
+      }
+      return;
+    }
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out of CareNearby?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: signOut },
+      ],
+    );
+  }
+
+  function contactSupport() {
+    Linking.openURL('mailto:support@carenearby.ca?subject=CareNearby Support');
+  }
+
+  const initial = user?.name?.[0]?.toUpperCase() ?? '?';
+
+  return (
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Hero */}
+      <LinearGradient
+        colors={[Colors.heroNavy, Colors.heroNavyLight]}
+        style={[styles.hero, { paddingTop: insets.top + 20 }]}
+      >
+        {/* Avatar */}
+        <Pressable style={styles.avatarWrap} onPress={showPhotoOptions}>
+          {photoUri ? (
+            <Image source={{ uri: photoUri }} style={styles.avatarImage} />
+          ) : (
+            <View style={styles.avatarCircle}>
+              <Text style={styles.avatarInitial}>{initial}</Text>
+            </View>
+          )}
+          <View style={styles.editBadge}>
+            <Text style={styles.editBadgeText}>📷</Text>
+          </View>
+        </Pressable>
+
+        <Text style={styles.heroName}>{user?.name ?? '—'}</Text>
+
+        {/* Role badge */}
+        <View style={[styles.roleBadge, { backgroundColor: roleConfig.color + '30', borderColor: roleConfig.color + '60' }]}>
+          <Text style={styles.roleBadgeIcon}>{roleConfig.icon}</Text>
+          <Text style={[styles.roleBadgeText, { color: roleConfig.color }]}>{roleConfig.label}</Text>
+        </View>
+
+        <Text style={styles.heroLocation}>📍 Greater Sudbury, ON</Text>
+      </LinearGradient>
+
+      {/* Account Info */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Account</Text>
+        <View style={styles.card}>
+          <InfoRow label="Phone" value={user?.phone ?? '—'} icon="📱" />
+          <View style={styles.divider} />
+          <InfoRow label="Account ID" value={user?.id ? `CN-${user.id.slice(-6).toUpperCase()}` : '—'} icon="🔑" />
+          <View style={styles.divider} />
+          <InfoRow label="Role" value={roleConfig.label} icon={roleConfig.icon} />
+        </View>
+      </View>
+
+      {/* App Info */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>App Info</Text>
+        <View style={styles.card}>
+          <InfoRow label="Version" value={`v${appVersion}`} icon="📦" />
+          <View style={styles.divider} />
+          <InfoRow label="Region" value="Greater Sudbury, ON 🇨🇦" icon="🗺️" />
+          <View style={styles.divider} />
+          <InfoRow label="Coverage" value="15 km radius" icon="📍" />
+          <View style={styles.divider} />
+          <InfoRow label="Rate" value="$25/hr · 3hr minimum" icon="💰" />
+          <View style={styles.divider} />
+          <Pressable style={styles.infoRow} onPress={contactSupport}>
+            <View style={styles.infoRowLeft}>
+              <Text style={styles.infoRowIcon}>✉️</Text>
+              <Text style={styles.infoRowLabel}>Support</Text>
+            </View>
+            <Text style={[styles.infoRowValue, { color: Colors.systemBlue }]}>support@carenearby.ca</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Trust Info (Customer only) */}
+      {user?.role === 'CUSTOMER' && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Our PSW Standards</Text>
+          <View style={styles.card}>
+            {[
+              { icon: '✓', label: 'Police Checked', desc: 'All PSWs pass a criminal record check' },
+              { icon: '✓', label: 'ID Verified', desc: 'Government-issued ID confirmed' },
+              { icon: '✓', label: 'Admin Approved', desc: 'Manually reviewed by our team' },
+              { icon: '✓', label: 'Insured', desc: 'Liability coverage on all sessions' },
+            ].map((t, i) => (
+              <View key={t.label}>
+                {i > 0 && <View style={styles.divider} />}
+                <View style={styles.trustRow}>
+                  <View style={styles.trustCheck}>
+                    <Text style={styles.trustCheckText}>{t.icon}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.trustLabel}>{t.label}</Text>
+                    <Text style={styles.trustDesc}>{t.desc}</Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Sign Out */}
+      <View style={styles.section}>
+        <IOSButton
+          title="Sign Out"
+          variant="destructive"
+          onPress={handleSignOut}
+        />
+      </View>
+
+      <Text style={styles.footer}>
+        © {new Date().getFullYear()} CareNearby · Private pay PSW platform{'\n'}Greater Sudbury, Ontario
+      </Text>
+    </ScrollView>
+  );
 }
 
-const infoRowStyles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 13, gap: 10 },
-  icon: { fontSize: 18, width: 26 },
-  label: { flex: 1, fontSize: 15, color: Colors.secondaryLabel },
-  value: { fontSize: 15, fontWeight: '500', color: Colors.label, maxWidth: '55%', textAlign: 'right' },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: Colors.separator },
-});
-
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.systemGroupedBackground },
-  content: { paddingHorizontal: 20, paddingBottom: 40, paddingTop: 8 },
-
-  pageTitle: { fontSize: 32, fontWeight: '700', color: Colors.label, marginBottom: 24 },
-
-  avatarSection: { alignItems: 'center', marginBottom: 28, gap: 10 },
-  avatar: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
+  container: { flex: 1, backgroundColor: Colors.systemGroupedBackground },
+  hero: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 28 },
+  avatarWrap: { marginBottom: 16, position: 'relative' },
+  avatarImage: { width: 88, height: 88, borderRadius: 44, borderWidth: 3, borderColor: 'rgba(255,255,255,0.5)' },
+  avatarCircle: {
+    width: 88, height: 88, borderRadius: 44,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 3, borderColor: 'rgba(255,255,255,0.4)',
+    alignItems: 'center', justifyContent: 'center',
   },
-  avatarText: { color: '#fff', fontSize: 36, fontWeight: '700' },
-  name: { fontSize: 22, fontWeight: '700', color: Colors.label },
+  avatarInitial: { color: '#fff', fontSize: 36, fontWeight: '800' },
+  editBadge: {
+    position: 'absolute', bottom: 0, right: 0,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: Colors.systemBlue,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: Colors.heroNavy,
+  },
+  editBadgeText: { fontSize: 12 },
+  heroName: { color: '#fff', fontSize: 24, fontWeight: '800', marginBottom: 8 },
   roleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 6,
+    borderRadius: 20, borderWidth: 1, marginBottom: 10,
   },
-  roleIcon: { fontSize: 16 },
-  roleText: { fontSize: 14, fontWeight: '600' },
-
-  card: {
-    backgroundColor: Colors.systemBackground,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-
-  signOutBtn: {
-    backgroundColor: `${Colors.systemRed}15`,
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 24,
-  },
-  signOutText: { fontSize: 16, fontWeight: '600', color: Colors.systemRed },
-
-  availabilityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    gap: 12,
-  },
-  availabilityLabel: { fontSize: 15, fontWeight: '600', color: Colors.label },
-  availabilityHint: { fontSize: 13, color: Colors.secondaryLabel, marginTop: 2 },
-
-  footer: { fontSize: 12, color: Colors.tertiaryLabel, textAlign: 'center' },
+  roleBadgeIcon: { fontSize: 16 },
+  roleBadgeText: { fontSize: 14, fontWeight: '700' },
+  heroLocation: { color: 'rgba(255,255,255,0.65)', fontSize: 13 },
+  section: { paddingHorizontal: 16, marginBottom: 4 },
+  sectionTitle: { fontSize: 13, fontWeight: '700', color: Colors.secondaryLabel, textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 4, marginBottom: 8, marginTop: 20 },
+  card: { backgroundColor: Colors.systemBackground, borderRadius: 16, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+  divider: { height: 1, backgroundColor: Colors.separator, marginVertical: 12 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  infoRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  infoRowIcon: { fontSize: 16 },
+  infoRowLabel: { fontSize: 14, color: Colors.secondaryLabel },
+  infoRowValue: { fontSize: 14, fontWeight: '600', color: Colors.label, flex: 1, textAlign: 'right', marginLeft: 8 },
+  trustRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  trustCheck: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#F0FDF4', alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  trustCheckText: { fontSize: 14, color: Colors.trustGreen, fontWeight: '700' },
+  trustLabel: { fontSize: 14, fontWeight: '700', color: Colors.label, marginBottom: 2 },
+  trustDesc: { fontSize: 12, color: Colors.secondaryLabel },
+  footer: { textAlign: 'center', fontSize: 12, color: Colors.tertiaryLabel, marginTop: 24, marginHorizontal: 20, lineHeight: 18 },
 });

@@ -1,258 +1,244 @@
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
-import {
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { apiCancelBooking, apiRateBooking } from '../../api/client';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRoute } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+import * as Linking from 'expo-linking';
+import { apiRateBooking, Booking } from '../../api/client';
 import { IOSButton } from '../../components/IOSButton';
 import { StatusBadge } from '../../components/StatusBadge';
-import { CustomerStackParams } from '../../navigation/CustomerNavigator';
-import { Colors } from '../../utils/colors';
+import { StatusTimeline } from '../../components/StatusTimeline';
+import { Colors, ServiceIcons, StatusColors } from '../../utils/colors';
 
-type Props = NativeStackScreenProps<CustomerStackParams, 'BookingDetail'>;
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
 
-export function BookingDetailScreen({ route }: Props) {
-  const [booking, setBooking] = useState(route.params.booking);
+export function BookingDetailScreen() {
+  const route = useRoute<any>();
+  const insets = useSafeAreaInsets();
+  const [booking] = useState<Booking>(route.params.booking);
   const [rating, setRating] = useState(0);
-  const [ratingSubmitted, setRatingSubmitted] = useState(false);
+  const [rated, setRated] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [cancelLoading, setCancelLoading] = useState(false);
 
-  const date = new Date(booking.scheduledAt);
-  const dateStr = date.toLocaleDateString('en-CA', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-  const timeStr = date.toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit' });
+  const statusColor = StatusColors[booking.status] ?? Colors.systemGray;
+  const icon = ServiceIcons[booking.serviceType] ?? '🏥';
 
-  async function handleRate() {
-    if (rating === 0) return;
+  async function submitRating() {
+    if (rating === 0) {
+      Alert.alert('Select Rating', 'Please tap a star to rate your experience.');
+      return;
+    }
     setLoading(true);
     try {
       await apiRateBooking({ bookingId: booking._id, rating });
-      setRatingSubmitted(true);
-      Alert.alert('Thank you!', 'Your rating has been submitted.');
+      if (typeof Haptics.notificationAsync === 'function') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      setRated(true);
     } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Could not submit rating.');
-    } finally {
-      setLoading(false);
+      Alert.alert('Rating Failed', e.message || 'Please try again.');
     }
+    setLoading(false);
   }
 
-  async function handleCancel() {
-    Alert.alert(
-      'Cancel Booking',
-      'Are you sure you want to cancel this booking? This cannot be undone.',
-      [
-        { text: 'Keep Booking', style: 'cancel' },
-        {
-          text: 'Cancel Booking',
-          style: 'destructive',
-          onPress: async () => {
-            setCancelLoading(true);
-            try {
-              const { booking: updated } = await apiCancelBooking(booking._id);
-              setBooking(updated);
-            } catch (e: any) {
-              Alert.alert('Error', e.message ?? 'Could not cancel booking.');
-            } finally {
-              setCancelLoading(false);
-            }
-          },
-        },
-      ],
-    );
+  function callPSW() {
+    if (booking.psw?.phone) Linking.openURL(`tel:${booking.psw.phone}`);
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Status hero */}
-        <View style={styles.hero}>
-          <StatusBadge status={booking.status} />
-          <Text style={styles.serviceType}>{booking.serviceType}</Text>
-          <Text style={styles.price}>${booking.totalPrice?.toFixed(2)}</Text>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Hero */}
+      <LinearGradient
+        colors={[statusColor + 'CC', statusColor + '44', Colors.systemGroupedBackground]}
+        style={styles.hero}
+      >
+        <View style={styles.heroContent}>
+          <Text style={styles.heroIcon}>{icon}</Text>
+          <View style={{ flex: 1, gap: 8 }}>
+            <StatusBadge status={booking.status} size="md" />
+            <Text style={styles.heroService}>{booking.serviceType}</Text>
+            <Text style={styles.heroPrice}>${booking.totalPrice?.toFixed(0) ?? '—'}</Text>
+            <Text style={styles.heroPay}>Private pay · {booking.paymentStatus}</Text>
+          </View>
         </View>
+      </LinearGradient>
 
-        {/* Info rows */}
+      {/* Status Timeline */}
+      {booking.status !== 'CANCELLED' && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Booking Status</Text>
+          <View style={styles.card}>
+            <StatusTimeline status={booking.status} />
+          </View>
+        </View>
+      )}
+
+      {/* Details */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Details</Text>
         <View style={styles.card}>
-          <Row icon="📅" label="Date" value={dateStr} />
-          <Divider />
-          <Row icon="🕐" label="Time" value={timeStr} />
-          <Divider />
-          <Row icon="⏱️" label="Duration" value={`${booking.hours} hours`} />
-          <Divider />
-          <Row icon="💳" label="Payment" value={booking.paymentStatus} />
+          {[
+            ['📅 Date', formatDate(booking.scheduledAt)],
+            ['⏰ Start Time', formatTime(booking.scheduledAt)],
+            ['⏱ Duration', `${booking.hours} hours`],
+            ['📍 Location', 'Greater Sudbury, ON'],
+            ['💳 Payment', booking.paymentStatus],
+          ].map(([label, value]) => (
+            <View key={label} style={styles.detailRow}>
+              <Text style={styles.detailLabel}>{label}</Text>
+              <Text style={styles.detailValue}>{value}</Text>
+            </View>
+          ))}
         </View>
+      </View>
 
-        {/* PSW info */}
-        {booking.psw ? (
-          <>
-            <Text style={styles.sectionTitle}>Your PSW</Text>
-            <View style={styles.card}>
-              <View style={styles.pswCard}>
-                <View style={styles.pswAvatar}>
-                  <Text style={styles.pswAvatarText}>{booking.psw.name[0]}</Text>
-                </View>
-                <View>
-                  <Text style={styles.pswName}>{booking.psw.name}</Text>
-                  <Text style={styles.pswPhone}>{booking.psw.phone}</Text>
-                </View>
-              </View>
-            </View>
-          </>
-        ) : (
-          <View style={styles.waitingCard}>
-            <Text style={styles.waitingIcon}>⏳</Text>
-            <Text style={styles.waitingText}>Waiting for a PSW to accept</Text>
+      {/* Notes */}
+      {booking.notes ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Special Instructions</Text>
+          <View style={styles.card}>
+            <Text style={styles.notesText}>{booking.notes}</Text>
           </View>
-        )}
+        </View>
+      ) : null}
 
-        {/* Cancel booking */}
-        {(booking.status === 'REQUESTED' || booking.status === 'ACCEPTED') && (
-          <IOSButton
-            title="Cancel Booking"
-            onPress={handleCancel}
-            loading={cancelLoading}
-            variant="destructive"
-            size="medium"
-            style={{ marginBottom: 16 }}
-          />
-        )}
-
-        {/* Rating */}
-        {booking.status === 'COMPLETED' && !booking.ratingGiven && !ratingSubmitted && (
-          <>
-            <Text style={styles.sectionTitle}>Rate Your PSW</Text>
-            <View style={styles.card}>
-              <View style={styles.starsRow}>
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <Text
-                    key={s}
-                    style={[styles.star, s <= rating && styles.starActive]}
-                    onPress={() => setRating(s)}
-                  >
-                    ★
-                  </Text>
-                ))}
-              </View>
-              <IOSButton
-                title="Submit Rating"
-                onPress={handleRate}
-                loading={loading}
-                disabled={rating === 0}
-                size="medium"
-                style={{ marginTop: 16 }}
-              />
+      {/* PSW Card */}
+      {booking.psw ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Your PSW</Text>
+          <View style={[styles.card, styles.pswCard]}>
+            <View style={styles.pswAvatar}>
+              <Text style={styles.pswAvatarText}>{booking.psw.name[0].toUpperCase()}</Text>
             </View>
-          </>
-        )}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.pswName}>{booking.psw.name}</Text>
+              {(booking.psw.rating ?? 0) > 0 && (
+                <Text style={styles.pswRating}>⭐ {booking.psw.rating?.toFixed(1)} rating</Text>
+              )}
+              <View style={styles.pswBadgesRow}>
+                <View style={styles.pswBadge}><Text style={styles.pswBadgeText}>✓ Admin Verified</Text></View>
+                <View style={styles.pswBadge}><Text style={styles.pswBadgeText}>✓ Sudbury PSW</Text></View>
+              </View>
+            </View>
+            {['ACCEPTED', 'STARTED'].includes(booking.status) && booking.psw.phone ? (
+              <Pressable style={styles.callBtn} onPress={callPSW}>
+                <Text style={styles.callBtnText}>📞</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : booking.status === 'REQUESTED' ? (
+        <View style={styles.section}>
+          <View style={styles.findingCard}>
+            <Text style={styles.findingIcon}>⏳</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.findingTitle}>Finding your PSW</Text>
+              <Text style={styles.findingDesc}>We're matching you with the best available PSW in your area.</Text>
+            </View>
+          </View>
+        </View>
+      ) : null}
 
-        {(booking.ratingGiven || ratingSubmitted) && (
+      {/* Rating */}
+      {booking.status === 'COMPLETED' && !rated && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Rate Your Experience</Text>
+          <View style={styles.card}>
+            <Text style={styles.ratingPrompt}>How was your care session?</Text>
+            <View style={styles.starsRow}>
+              {[1, 2, 3, 4, 5].map(s => (
+                <Pressable
+                  key={s}
+                  onPress={() => {
+                    if (typeof Haptics.selectionAsync === 'function') Haptics.selectionAsync();
+                    setRating(s);
+                  }}
+                  style={styles.starBtn}
+                >
+                  <Text style={[styles.star, s <= rating ? styles.starActive : styles.starInactive]}>★</Text>
+                </Pressable>
+              ))}
+            </View>
+            {rating > 0 && (
+              <Text style={styles.ratingLabel}>
+                {['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent!'][rating]}
+              </Text>
+            )}
+            <IOSButton
+              title="Submit Rating"
+              loading={loading}
+              onPress={submitRating}
+              style={{ marginTop: 16 }}
+              variant={rating === 0 ? 'outline' : 'filled'}
+            />
+          </View>
+        </View>
+      )}
+
+      {rated && (
+        <View style={styles.section}>
           <View style={styles.ratedBanner}>
-            <Text style={styles.ratedText}>⭐ Rating submitted — thank you!</Text>
+            <Text style={styles.ratedIcon}>⭐</Text>
+            <Text style={styles.ratedText}>Rating submitted! Thank you for your feedback.</Text>
           </View>
-        )}
+        </View>
+      )}
 
-        {/* Booking ID */}
-        <Text style={styles.bookingId}>Booking ID: {booking._id}</Text>
-      </ScrollView>
-    </SafeAreaView>
+      <View style={{ paddingHorizontal: 20, paddingTop: 8 }}>
+        <Text style={styles.bookingId}>Booking #{booking._id.slice(-8).toUpperCase()}</Text>
+      </View>
+    </ScrollView>
   );
 }
-
-function Row({ icon, label, value }: { icon: string; label: string; value: string }) {
-  return (
-    <View style={rowStyles.row}>
-      <Text style={rowStyles.icon}>{icon}</Text>
-      <Text style={rowStyles.label}>{label}</Text>
-      <Text style={rowStyles.value}>{value}</Text>
-    </View>
-  );
-}
-
-function Divider() {
-  return <View style={rowStyles.divider} />;
-}
-
-const rowStyles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 10 },
-  icon: { fontSize: 18, width: 26 },
-  label: { flex: 1, fontSize: 15, color: Colors.secondaryLabel },
-  value: { fontSize: 15, fontWeight: '500', color: Colors.label, textAlign: 'right', flexShrink: 1 },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: Colors.separator },
-});
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.systemGroupedBackground },
-  content: { padding: 20, paddingBottom: 40 },
-
-  hero: { alignItems: 'center', paddingVertical: 24, gap: 10 },
-  serviceType: { fontSize: 24, fontWeight: '700', color: Colors.label, marginTop: 4 },
-  price: { fontSize: 36, fontWeight: '800', color: Colors.systemBlue },
-
-  card: {
-    backgroundColor: Colors.systemBackground,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.label,
-    marginBottom: 10,
-    marginTop: 8,
-  },
-
-  pswCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 8 },
-  pswAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.systemGreen,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pswAvatarText: { color: '#fff', fontSize: 20, fontWeight: '700' },
-  pswName: { fontSize: 16, fontWeight: '600', color: Colors.label },
-  pswPhone: { fontSize: 13, color: Colors.secondaryLabel, marginTop: 2 },
-
-  waitingCard: {
-    backgroundColor: `${Colors.systemOrange}15`,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-  },
-  waitingIcon: { fontSize: 28 },
-  waitingText: { fontSize: 15, color: Colors.systemOrange, fontWeight: '500' },
-
-  starsRow: { flexDirection: 'row', justifyContent: 'center', gap: 8 },
-  star: { fontSize: 40, color: Colors.systemGray4 },
+  container: { flex: 1, backgroundColor: Colors.systemGroupedBackground },
+  hero: { padding: 24, paddingBottom: 32 },
+  heroContent: { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
+  heroIcon: { fontSize: 48, marginTop: 4 },
+  heroService: { fontSize: 22, fontWeight: '800', color: Colors.label },
+  heroPrice: { fontSize: 32, fontWeight: '900', color: Colors.label },
+  heroPay: { fontSize: 13, color: Colors.secondaryLabel },
+  section: { paddingHorizontal: 16, marginBottom: 4 },
+  sectionTitle: { fontSize: 13, fontWeight: '700', color: Colors.secondaryLabel, textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 4, marginBottom: 8, marginTop: 16 },
+  card: { backgroundColor: Colors.systemBackground, borderRadius: 16, padding: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  detailLabel: { fontSize: 14, color: Colors.secondaryLabel },
+  detailValue: { fontSize: 14, fontWeight: '600', color: Colors.label, flex: 1, textAlign: 'right' },
+  notesText: { fontSize: 15, color: Colors.label, lineHeight: 22 },
+  pswCard: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  pswAvatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: Colors.systemBlue, alignItems: 'center', justifyContent: 'center' },
+  pswAvatarText: { color: '#fff', fontSize: 22, fontWeight: '700' },
+  pswName: { fontSize: 16, fontWeight: '700', color: Colors.label, marginBottom: 3 },
+  pswRating: { fontSize: 13, color: Colors.secondaryLabel, marginBottom: 6 },
+  pswBadgesRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  pswBadge: { backgroundColor: '#F0FDF4', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  pswBadgeText: { fontSize: 11, fontWeight: '600', color: Colors.trustGreen },
+  callBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.systemGreen + '20', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.systemGreen + '40' },
+  callBtnText: { fontSize: 20 },
+  findingCard: { flexDirection: 'row', gap: 14, alignItems: 'flex-start', backgroundColor: '#FFF7ED', borderRadius: 16, padding: 18, borderWidth: 1, borderColor: Colors.systemOrange + '30' },
+  findingIcon: { fontSize: 28 },
+  findingTitle: { fontSize: 15, fontWeight: '700', color: Colors.systemOrange, marginBottom: 4 },
+  findingDesc: { fontSize: 13, color: Colors.secondaryLabel, lineHeight: 19 },
+  ratingPrompt: { fontSize: 16, fontWeight: '700', color: Colors.label, marginBottom: 16, textAlign: 'center' },
+  starsRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 8 },
+  starBtn: { padding: 4 },
+  star: { fontSize: 40 },
   starActive: { color: Colors.systemYellow },
-
-  ratedBanner: {
-    backgroundColor: `${Colors.systemGreen}15`,
-    borderRadius: 14,
-    padding: 14,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  ratedText: { fontSize: 15, color: Colors.systemGreen, fontWeight: '600' },
-
-  bookingId: {
-    fontSize: 11,
-    color: Colors.tertiaryLabel,
-    textAlign: 'center',
-    marginTop: 8,
-  },
+  starInactive: { color: Colors.systemGray4 },
+  ratingLabel: { textAlign: 'center', fontSize: 15, fontWeight: '600', color: Colors.systemOrange },
+  ratedBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F0FDF4', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#BBF7D0' },
+  ratedIcon: { fontSize: 24 },
+  ratedText: { fontSize: 14, fontWeight: '600', color: Colors.trustGreen, flex: 1 },
+  bookingId: { fontSize: 12, color: Colors.tertiaryLabel, textAlign: 'center', marginTop: 8 },
 });

@@ -8,12 +8,26 @@ const PSWProfile            = require('../models/PSWProfile');
 const { authenticate, requireRole } = require('../middleware/auth');
 const validate              = require('../middleware/validate');
 
+// Name sanitization (mirrors auth.js)
+function sanitizeName(raw) {
+  if (!raw || typeof raw !== 'string') return raw;
+  return raw
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase())
+    .replace(/\s+(And|&)\s*$/i, '')
+    .replace(/^\s*(And|&)\s+/i, '')
+    .trim();
+}
+
 const VALID_SERVICE_TYPES = [
   'Personal Care',
   'Companionship',
   'Meal Preparation',
   'Medication Reminders',
   'Light Housekeeping',
+  'Mobility Assistance',
+  'Post-Surgery Support',
 ];
 
 const router = express.Router();
@@ -57,17 +71,20 @@ router.post(
       const price = Math.round(Number(hours) * HOURLY_RATE() * 100) / 100;
 
       const booking = await Booking.create({
-        customerId: req.user._id,
+        customerId:        req.user._id,
         serviceType,
-        hours:      Number(hours),
-        scheduledAt: scheduledDate,
+        hours:             Number(hours),
+        scheduledAt:       scheduledDate,
         location: {
           type:        'Point',
           coordinates: location.coordinates,
         },
+        address:           req.body.address?.trim() || 'Greater Sudbury, ON',
+        careRecipientName: req.body.careRecipientName?.trim() || '',
+        urgency:           req.body.urgency || 'routine',
         price,
-        notes:         notes || '',
-        paymentStatus: 'PENDING',
+        notes:             notes || '',
+        paymentStatus:     'PENDING',
       });
 
       res.status(201).json({ booking });
@@ -209,10 +226,12 @@ router.patch(
   validate,
   async (req, res) => {
     try {
-      const allowed = ['name', 'email', 'address', 'emergencyContact'];
+      const allowed = ['name', 'email', 'address', 'emergencyContact', 'preferredLanguage', 'gender'];
       const updates = Object.fromEntries(
         Object.entries(req.body).filter(([k]) => allowed.includes(k))
       );
+      // Sanitize name if provided
+      if (updates.name) updates.name = sanitizeName(updates.name);
 
       const user = await User.findByIdAndUpdate(req.user._id, updates, { new: true }).select('-__v');
       res.json({ message: 'Profile updated', user });

@@ -1,15 +1,44 @@
 const OTP = require('../models/OTP');
 
-const MAX_ATTEMPTS = 5; // lock after 5 wrong guesses
+const MAX_ATTEMPTS = 5;
 
 function getTTLMs() {
   return (parseInt(process.env.OTP_TTL_MINUTES, 10) || 5) * 60 * 1000;
 }
 
 /**
+ * Send OTP via Twilio SMS if credentials are configured.
+ * Falls back to console.log in dev mode.
+ */
+async function sendSMS(phone, otp) {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken  = process.env.TWILIO_AUTH_TOKEN;
+  const from       = process.env.TWILIO_PHONE_NUMBER;
+
+  if (!accountSid || !authToken || !from) {
+    // Dev mode — print OTP to server logs
+    console.log(`[DEV] OTP for ${phone}: ${otp}`);
+    return;
+  }
+
+  try {
+    const twilio = require('twilio')(accountSid, authToken);
+    await twilio.messages.create({
+      body: `Your CareNearby verification code is: ${otp}\n\nValid for 5 minutes. Do not share this code.\n\nCareNearby · Sudbury, ON`,
+      from,
+      to: phone,
+    });
+    console.log(`[SMS] OTP sent to ${phone}`);
+  } catch (err) {
+    console.error('[SMS] Twilio failed:', err.message);
+    // Fallback so dev/test can still proceed
+    console.log(`[FALLBACK] OTP for ${phone}: ${otp}`);
+  }
+}
+
+/**
  * Generate and store a 6-digit OTP for the given phone number.
- * Replaces any existing OTP for that phone.
- * In production: replace console.log with Twilio / AWS SNS.
+ * Replaces any existing OTP for that phone, then sends via SMS.
  */
 async function generateOTP(phone) {
   const otp       = Math.floor(100_000 + Math.random() * 900_000).toString();
@@ -21,8 +50,10 @@ async function generateOTP(phone) {
     { upsert: true, new: true }
   );
 
-  // TODO: replace with Twilio SMS in production
-  console.log(`[DEV] OTP for ${phone}: ${otp}`);
+  // Fire-and-forget: do not await so the API responds instantly
+  sendSMS(phone, otp).catch((err) =>
+    console.error('[OTP] sendSMS uncaught error:', err.message)
+  );
 
   return otp;
 }

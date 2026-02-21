@@ -3,97 +3,126 @@ import React from 'react';
 import {
   ActivityIndicator,
   Platform,
+  Pressable,
+  PressableProps,
   StyleSheet,
   Text,
-  TouchableOpacity,
-  TouchableOpacityProps,
+  ViewStyle,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../utils/colors';
 
-interface Props extends TouchableOpacityProps {
+interface IOSButtonProps extends PressableProps {
   title: string;
-  variant?: 'filled' | 'outline' | 'ghost' | 'destructive';
+  variant?: 'filled' | 'outline' | 'ghost' | 'destructive' | 'success';
   size?: 'large' | 'medium' | 'small';
   loading?: boolean;
+  style?: ViewStyle;
+  icon?: string;
 }
+
+const GRADIENT_PAIRS: Record<string, [string, string]> = {
+  filled:      ['#007AFF', '#0056CC'],
+  success:     ['#10B981', '#059669'],
+  destructive: ['#EF4444', '#DC2626'],
+};
 
 export function IOSButton({
   title,
   variant = 'filled',
   size = 'large',
   loading = false,
-  onPress,
-  style,
   disabled,
+  style,
+  onPress,
+  icon,
   ...rest
-}: Props) {
-  const handlePress = async (e: any) => {
-    if (Platform.OS !== 'web') {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
+}: IOSButtonProps) {
+  const isDisabled = disabled || loading;
+
+  const handlePress = (e: any) => {
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onPress?.(e);
   };
 
-  const isDisabled = disabled || loading;
+  const textColor =
+    variant === 'outline'     ? Colors.systemBlue
+    : variant === 'ghost'     ? Colors.systemBlue
+    : '#fff';
+
+  const useGradient = ['filled', 'success', 'destructive'].includes(variant);
+
+  const content = (
+    <>
+      {loading ? (
+        <ActivityIndicator color={textColor} />
+      ) : (
+        <>
+          {icon && <Text style={[styles.iconText, { color: textColor }]}>{icon}</Text>}
+          <Text style={[styles.label, styles[`${size}Text` as keyof typeof styles], { color: textColor }]}>
+            {title}
+          </Text>
+        </>
+      )}
+    </>
+  );
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.75}
-      onPress={handlePress}
-      disabled={isDisabled}
-      style={[
+    <Pressable
+      style={({ pressed }) => [
         styles.base,
-        styles[variant],
         styles[size],
+        !useGradient && styles[`${variant}Bg` as keyof typeof styles],
+        useGradient && styles.gradientWrapper,
         isDisabled && styles.disabled,
+        pressed && !isDisabled && styles.pressed,
         style,
       ]}
+      onPress={handlePress}
+      disabled={isDisabled}
       {...rest}
     >
-      {loading ? (
-        <ActivityIndicator
-          color={variant === 'filled' || variant === 'destructive' ? '#fff' : Colors.systemBlue}
-        />
-      ) : (
-        <Text style={[styles.label, styles[`${variant}Label` as keyof typeof styles]]}>
-          {title}
-        </Text>
-      )}
-    </TouchableOpacity>
+      {useGradient ? (
+        <LinearGradient
+          colors={GRADIENT_PAIRS[variant] ?? ['#007AFF', '#0056CC']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+          style={styles.gradientInner}
+        >
+          {content}
+        </LinearGradient>
+      ) : content}
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: 14,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    overflow: 'hidden',
   },
-  // Variants
-  filled: {
-    backgroundColor: Colors.systemBlue,
+  large:  { height: 56, paddingHorizontal: 28 },
+  medium: { height: 46, paddingHorizontal: 20 },
+  small:  { height: 36, paddingHorizontal: 16 },
+
+  gradientWrapper: { padding: 0 },
+  gradientInner: {
+    flex: 1, width: '100%',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6,
   },
-  outline: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: Colors.systemBlue,
-  },
-  ghost: {
-    backgroundColor: 'transparent',
-  },
-  destructive: {
-    backgroundColor: Colors.systemRed,
-  },
-  // Sizes
-  large: { height: 54, paddingHorizontal: 24 },
-  medium: { height: 44, paddingHorizontal: 20 },
-  small: { height: 34, paddingHorizontal: 14 },
-  // Labels
-  label: { fontWeight: '600', letterSpacing: 0.2 },
-  filledLabel: { color: '#fff', fontSize: 17 },
-  outlineLabel: { color: Colors.systemBlue, fontSize: 17 },
-  ghostLabel: { color: Colors.systemBlue, fontSize: 17 },
-  destructiveLabel: { color: '#fff', fontSize: 17 },
-  // State
-  disabled: { opacity: 0.4 },
+  outlineBg:     { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: Colors.systemBlue },
+  ghostBg:       { backgroundColor: 'transparent' },
+
+  largeText:  { fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
+  mediumText: { fontSize: 15, fontWeight: '700' },
+  smallText:  { fontSize: 13, fontWeight: '700' },
+
+  label:    {},
+  iconText: { fontSize: 18 },
+  disabled: { opacity: 0.38 },
+  pressed:  { opacity: 0.82, transform: [{ scale: 0.975 }] },
 });

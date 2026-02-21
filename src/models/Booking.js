@@ -33,11 +33,24 @@ const bookingSchema = new mongoose.Schema(
       type:        { type: String, enum: ['Point'], default: 'Point' },
       coordinates: { type: [Number], required: true }, // [longitude, latitude]
     },
+    // Human-readable address (displayed in UI instead of raw coordinates)
+    address:        { type: String, default: '', trim: true },
+
     price: { type: Number, required: true }, // CAD, stored as 'price', exposed as 'totalPrice'
 
-    notes: { type: String, default: '', trim: true },   // special instructions from customer
-    ratingGiven: { type: Boolean, default: false },      // prevent duplicate ratings
-    cancelledBy: { type: String, enum: ['CUSTOMER', 'PSW', 'ADMIN'], default: null },
+    notes:       { type: String, default: '', trim: true },   // special instructions from customer
+    ratingGiven: { type: Boolean, default: false },           // prevent duplicate ratings
+    cancelledBy: { type: String, enum: ['CUSTOMER', 'PSW', 'ADMIN', null], default: null },
+
+    // Care recipient (if different from account holder, e.g. booking for a parent)
+    careRecipientName: { type: String, default: '', trim: true },
+
+    // Urgency level
+    urgency: {
+      type:    String,
+      enum:    ['routine', 'urgent', 'emergency'],
+      default: 'routine',
+    },
 
     paymentStatus: {
       type:    String,
@@ -55,10 +68,8 @@ bookingSchema.index({ location: '2dsphere' });
 // ── Response transform ────────────────────────────────────────────────────────
 // Renames internal field names to the public API shape that the mobile app
 // expects: customerId → customer, pswId → psw, price → totalPrice.
-// This fires whenever Express calls res.json() with a Booking document.
 bookingSchema.set('toJSON', {
   transform: (_doc, ret) => {
-    // Populated ref OR raw ObjectId – expose under the friendly name
     if ('customerId' in ret) {
       ret.customer = ret.customerId;
       delete ret.customerId;
@@ -67,7 +78,6 @@ bookingSchema.set('toJSON', {
       ret.psw = ret.pswId || undefined;
       delete ret.pswId;
     }
-    // Rename stored 'price' field to 'totalPrice' in all API responses
     if ('price' in ret) {
       ret.totalPrice = ret.price;
       delete ret.price;

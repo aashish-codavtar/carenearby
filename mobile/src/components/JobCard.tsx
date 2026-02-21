@@ -1,123 +1,111 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Booking } from '../api/client';
-import { Colors } from '../utils/colors';
+import { Colors, ServiceAccentColors, ServiceIcons, StatusColors } from '../utils/colors';
 
 interface Props {
   job: Booking;
   onPress?: () => void;
   distanceKm?: number;
+  showStatus?: boolean;
 }
 
-const SERVICE_ICONS: Record<string, string> = {
-  'Personal Care': '🧼',
-  'Companionship': '🤝',
-  'Meal Preparation': '🍽️',
-  'Medication Reminders': '💊',
-  'Light Housekeeping': '🧹',
-};
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
 
-export function JobCard({ job, onPress, distanceKm }: Props) {
-  const icon = SERVICE_ICONS[job.serviceType] ?? '🏥';
-  const date = new Date(job.scheduledAt);
-  const dateStr = date.toLocaleDateString('en-CA', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
-  const timeStr = date.toLocaleTimeString('en-CA', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-  const rating = job.customer?.rating;
-  const stars = rating ? '⭐'.repeat(Math.round(rating)) : null;
+export function JobCard({ job, onPress, distanceKm, showStatus = false }: Props) {
+  const icon   = ServiceIcons[job.serviceType]         ?? '🏥';
+  const accent = ServiceAccentColors[job.serviceType]  ?? Colors.systemBlue;
+  const pay    = job.totalPrice ?? 0;
+  const rate   = job.hours > 0 ? Math.round(pay / job.hours) : 25;
 
   return (
-    <TouchableOpacity
-      style={styles.card}
+    <Pressable
+      style={({ pressed }) => [styles.card, pressed && { opacity: 0.93, transform: [{ scale: 0.99 }] }]}
       onPress={onPress}
-      activeOpacity={0.7}
+      disabled={!onPress}
     >
-      <View style={styles.row}>
-        <View style={styles.iconWrap}>
-          <Text style={styles.icon}>{icon}</Text>
+      {/* Earnings strip */}
+      <View style={[styles.earningsStrip, { backgroundColor: accent }]}>
+        <Text style={styles.earningsAmt}>${pay}</Text>
+        <Text style={styles.earningsRate}>${rate}/hr</Text>
+      </View>
+
+      <View style={styles.body}>
+        {/* Service + time */}
+        <View style={styles.topRow}>
+          <View style={[styles.iconWrap, { backgroundColor: accent + '18' }]}>
+            <Text style={styles.iconText}>{icon}</Text>
+          </View>
+          <View style={styles.info}>
+            <Text style={styles.service} numberOfLines={1}>{job.serviceType}</Text>
+            <Text style={styles.meta}>{fmtDate(job.scheduledAt)} · {fmtTime(job.scheduledAt)}</Text>
+            <Text style={styles.meta}>{job.hours}h · {job.customer.name}</Text>
+          </View>
+          {onPress && <Text style={styles.chevron}>›</Text>}
         </View>
-        <View style={styles.content}>
-          <Text style={styles.service}>{job.serviceType}</Text>
-          <Text style={styles.meta}>{dateStr} · {timeStr}</Text>
-          {stars && <Text style={styles.rating}>{stars} {rating?.toFixed(1)}</Text>}
-        </View>
-        <View style={styles.right}>
-          <Text style={styles.pay}>${job.totalPrice?.toFixed(0)}</Text>
-          <Text style={styles.hours}>{job.hours}h</Text>
+
+        {/* Pills row */}
+        <View style={styles.pillsRow}>
           {distanceKm !== undefined && (
-            <Text style={styles.distance}>{distanceKm.toFixed(1)} km</Text>
+            <View style={styles.pill}>
+              <Text style={styles.pillText}>📍 {distanceKm.toFixed(1)} km</Text>
+            </View>
+          )}
+          {(job.customer.rating ?? 0) > 0 && (
+            <View style={styles.pill}>
+              <Text style={styles.pillText}>⭐ {job.customer.rating?.toFixed(1)} client</Text>
+            </View>
+          )}
+          {showStatus && (
+            <View style={[styles.pill, { backgroundColor: (StatusColors[job.status] ?? Colors.systemGray) + '18', borderColor: (StatusColors[job.status] ?? Colors.systemGray) + '30' }]}>
+              <Text style={[styles.pillText, { color: StatusColors[job.status] ?? Colors.systemGray }]}>{job.status}</Text>
+            </View>
           )}
         </View>
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.systemBackground,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 18,
+    marginHorizontal: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  row: {
+    overflow: 'hidden',
+    shadowColor: Colors.cardShadow,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: Colors.separator,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
   },
-  iconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: `${Colors.systemBlue}15`,
+  earningsStrip: {
+    width: 72,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  icon: { fontSize: 24 },
-  content: { flex: 1 },
-  service: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.label,
-    marginBottom: 3,
-  },
-  meta: {
-    fontSize: 13,
-    color: Colors.secondaryLabel,
-    marginBottom: 2,
-  },
-  rating: {
-    fontSize: 12,
-    color: Colors.secondaryLabel,
-  },
-  right: {
-    alignItems: 'flex-end',
+    padding: 12,
     gap: 2,
   },
-  pay: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.systemGreen,
-  },
-  hours: {
-    fontSize: 13,
-    color: Colors.secondaryLabel,
-  },
-  distance: {
-    fontSize: 12,
-    color: Colors.systemBlue,
-    fontWeight: '500',
-  },
+  earningsAmt:  { color: '#fff', fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },
+  earningsRate: { color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '600' },
+  body:    { flex: 1, padding: 14 },
+  topRow:  { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
+  iconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  iconText: { fontSize: 20 },
+  info:     { flex: 1, gap: 2 },
+  service:  { fontSize: 14, fontWeight: '700', color: Colors.label, letterSpacing: -0.2 },
+  meta:     { fontSize: 12, color: Colors.secondaryLabel },
+  chevron:  { fontSize: 22, color: Colors.systemGray3, alignSelf: 'center' },
+  pillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  pill:     { backgroundColor: Colors.systemGray5, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: Colors.separator },
+  pillText: { fontSize: 11, fontWeight: '600', color: Colors.secondaryLabel },
 });

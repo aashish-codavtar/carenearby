@@ -10,6 +10,7 @@ export interface StoredUser {
   name: string;
   phone: string;
   role: 'CUSTOMER' | 'PSW' | 'ADMIN';
+  onboardingComplete?: boolean;
 }
 
 export const Storage = {

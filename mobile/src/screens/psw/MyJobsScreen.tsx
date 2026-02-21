@@ -3,9 +3,9 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'rea
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { apiMyBookings, Booking } from '../../api/client';
-import { BookingCard } from '../../components/BookingCard';
-import { BookingCardSkeleton } from '../../components/SkeletonLoader';
+import { apiMyJobs, Booking } from '../../api/client';
+import { JobCard } from '../../components/JobCard';
+import { JobCardSkeleton } from '../../components/SkeletonLoader';
 import { Colors } from '../../utils/colors';
 
 type Filter = 'ALL' | 'ACTIVE' | 'COMPLETED';
@@ -16,18 +16,10 @@ const FILTERS: { key: Filter; label: string; emoji: string }[] = [
   { key: 'COMPLETED', label: 'Done', emoji: '✅' },
 ];
 
-const ACTIVE_STATUSES = new Set(['REQUESTED', 'ACCEPTED', 'STARTED']);
-
-function filterBookings(bookings: Booking[], filter: Filter) {
-  if (filter === 'ACTIVE') return bookings.filter(b => ACTIVE_STATUSES.has(b.status));
-  if (filter === 'COMPLETED') return bookings.filter(b => !ACTIVE_STATUSES.has(b.status));
-  return bookings;
-}
-
-export function BookingsScreen() {
+export function MyJobsScreen() {
   const nav = useNavigation<any>();
   const insets = useSafeAreaInsets();
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [jobs, setJobs] = useState<Booking[]>([]);
   const [filter, setFilter] = useState<Filter>('ALL');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,8 +28,8 @@ export function BookingsScreen() {
     if (showRefresh) setRefreshing(true);
     else setLoading(true);
     try {
-      const { bookings: data } = await apiMyBookings();
-      setBookings(data.sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()));
+      const { bookings } = await apiMyJobs();
+      setJobs(bookings.sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()));
     } catch {}
     setLoading(false);
     setRefreshing(false);
@@ -45,8 +37,14 @@ export function BookingsScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const filtered = filterBookings(bookings, filter);
-  const activeCount = bookings.filter(b => ACTIVE_STATUSES.has(b.status)).length;
+  const ACTIVE_S = new Set(['ACCEPTED', 'STARTED']);
+  const filtered = filter === 'ACTIVE'
+    ? jobs.filter(j => ACTIVE_S.has(j.status))
+    : filter === 'COMPLETED'
+    ? jobs.filter(j => j.status === 'COMPLETED')
+    : jobs;
+
+  const totalEarned = jobs.filter(j => j.status === 'COMPLETED').reduce((s, j) => s + j.totalPrice, 0);
 
   return (
     <View style={styles.container}>
@@ -54,8 +52,8 @@ export function BookingsScreen() {
         colors={[Colors.heroNavy, Colors.heroNavyLight]}
         style={[styles.header, { paddingTop: insets.top + 16 }]}
       >
-        <Text style={styles.headerTitle}>My Bookings</Text>
-        <Text style={styles.headerSub}>{bookings.length} total · {activeCount} active</Text>
+        <Text style={styles.headerTitle}>My Jobs</Text>
+        <Text style={styles.headerSub}>{jobs.length} jobs · ${totalEarned} earned</Text>
 
         <View style={styles.filterRow}>
           {FILTERS.map(f => (
@@ -77,30 +75,22 @@ export function BookingsScreen() {
         keyExtractor={i => i._id}
         contentContainerStyle={styles.list}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={Colors.systemBlue} />
+          <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={Colors.systemGreen} />
         }
         ListHeaderComponent={loading ? (
           <View style={{ marginTop: 16 }}>
-            <BookingCardSkeleton />
-            <BookingCardSkeleton />
-            <BookingCardSkeleton />
+            <JobCardSkeleton /><JobCardSkeleton /><JobCardSkeleton />
           </View>
         ) : null}
         ListEmptyComponent={!loading ? (
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>📋</Text>
-            <Text style={styles.emptyTitle}>
-              {filter === 'ALL' ? 'No bookings yet' : `No ${filter.toLowerCase()} bookings`}
-            </Text>
-            <Text style={styles.emptySub}>
-              {filter === 'ALL'
-                ? 'Book your first PSW session to get started.'
-                : `You have no ${filter.toLowerCase()} bookings right now.`}
-            </Text>
+            <Text style={styles.emptyTitle}>No {filter.toLowerCase()} jobs</Text>
+            <Text style={styles.emptySub}>Accept jobs from the Find Jobs tab to see them here.</Text>
           </View>
         ) : null}
         renderItem={({ item }) => (
-          <BookingCard booking={item} onPress={() => nav.navigate('BookingDetail', { booking: item })} />
+          <JobCard job={item} showStatus onPress={() => nav.navigate('JobDetail', { job: item })} />
         )}
       />
     </View>

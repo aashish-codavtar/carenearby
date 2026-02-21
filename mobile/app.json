@@ -10,18 +10,23 @@
       "supportsTablet": false,
       "bundleIdentifier": "ca.carenearby.app",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "CareNearby uses your location to find nearby PSWs.",
-        "NSLocationAlwaysUsageDescription": "CareNearby uses your location to match PSWs to care requests."
+        "NSLocationWhenInUseUsageDescription": "CareNearby uses your location to find nearby PSWs and jobs.",
+        "NSLocationAlwaysUsageDescription": "CareNearby uses your location to match you with care requests.",
+        "NSPhotoLibraryUsageDescription": "CareNearby needs access to your photos to upload a profile picture.",
+        "NSCameraUsageDescription": "CareNearby needs camera access to take a profile photo."
       }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#007AFF"
+        "backgroundColor": "#0A2540"
       },
       "package": "ca.carenearby.app",
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "CAMERA"
       ]
     },
     "web": {
@@ -30,7 +35,7 @@
       "name": "CareNearby",
       "shortName": "CareNearby",
       "lang": "en",
-      "themeColor": "#007AFF",
+      "themeColor": "#0A2540",
       "backgroundColor": "#ffffff",
       "description": "Find Personal Support Workers near you in Sudbury, Ontario"
     },
@@ -40,7 +45,15 @@
         {
           "locationAlwaysAndWhenInUsePermission": "CareNearby needs your location to find nearby PSW workers and match care requests."
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "CareNearby needs access to your photos to set a profile picture.",
+          "cameraPermission": "CareNearby needs camera access to take a profile photo."
+        }
+      ],
+      "expo-font"
     ],
     "extra": {
       "apiUrl": "http://localhost:3000"

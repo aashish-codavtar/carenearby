@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Platform,
   RefreshControl,
   StyleSheet,
   Text,
@@ -11,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { PSWEntry, apiApprovePSW, apiGetPSWs, apiRejectPSW } from '../../api/client';
+import { PSWEntry, apiApprovePSW, apiGetPSWs } from '../../api/client';
 import { Colors } from '../../utils/colors';
 
 type Filter = 'ALL' | 'PENDING' | 'APPROVED';
@@ -28,7 +27,6 @@ export function PSWListScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
-  const [rejectingId, setRejectingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -44,40 +42,6 @@ export function PSWListScreen() {
   }, [filter]);
 
   useEffect(() => { load(); }, [load]);
-
-  async function doReject(id: string, reason?: string) {
-    setRejectingId(id);
-    try {
-      await apiRejectPSW(id, reason);
-      Alert.alert('Done', 'PSW application rejected.');
-      load();
-    } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Could not reject.');
-    } finally {
-      setRejectingId(null);
-    }
-  }
-
-  function handleReject(psw: PSWEntry) {
-    if (Platform.OS === 'ios') {
-      Alert.prompt(
-        'Reject PSW',
-        `Reason for rejecting ${psw.name} (optional):`,
-        async (reason) => { await doReject(psw._id, reason || undefined); },
-        'plain-text',
-        '',
-      );
-    } else {
-      Alert.alert(
-        'Reject PSW',
-        `Reject ${psw.name}'s application?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Reject', style: 'destructive', onPress: () => doReject(psw._id) },
-        ],
-      );
-    }
-  }
 
   async function handleApprove(psw: PSWEntry) {
     Alert.alert(
@@ -106,6 +70,13 @@ export function PSWListScreen() {
 
   function renderPSW({ item }: { item: PSWEntry }) {
     const isApproved = item.profile?.approvedByAdmin ?? false;
+    const qualType   = (item.profile as any)?.qualificationType ?? 'PSW';
+    const licenseNum = (item.profile as any)?.licenseNumber ?? '';
+    const college    = (item.profile as any)?.collegeName ?? '';
+    const experience = item.profile?.experienceYears ?? 0;
+    const firstAid   = (item.profile as any)?.firstAidCertified ?? false;
+    const hasCar     = (item.profile as any)?.ownTransportation ?? false;
+
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
@@ -122,11 +93,39 @@ export function PSWListScreen() {
           <View style={[styles.statusDot, { backgroundColor: isApproved ? Colors.systemGreen : Colors.systemOrange }]} />
         </View>
 
+        {/* Qualification row */}
+        <View style={styles.qualRow}>
+          <View style={styles.qualBadge}>
+            <Text style={styles.qualText}>{qualType}</Text>
+          </View>
+          {experience > 0 && (
+            <Text style={styles.qualDetail}>{experience} yrs exp</Text>
+          )}
+          {firstAid && <Text style={styles.qualDetail}>🚑 First Aid</Text>}
+          {hasCar    && <Text style={styles.qualDetail}>🚗 Own Car</Text>}
+        </View>
+
+        {/* License / College */}
+        {(licenseNum || college) ? (
+          <View style={styles.licenseRow}>
+            {licenseNum ? <Text style={styles.licenseText}>#{licenseNum}</Text> : null}
+            {college    ? <Text style={styles.licenseText}>{college}</Text>    : null}
+          </View>
+        ) : null}
+
         {item.profile?.bio ? (
           <Text style={styles.bio} numberOfLines={2}>{item.profile.bio}</Text>
         ) : null}
 
-        {item.profile?.certifications?.length ? (
+        {item.profile?.specialties?.length ? (
+          <View style={styles.certRow}>
+            {item.profile.specialties.slice(0, 3).map((c) => (
+              <View key={c} style={styles.certBadge}>
+                <Text style={styles.certText}>{c}</Text>
+              </View>
+            ))}
+          </View>
+        ) : item.profile?.certifications?.length ? (
           <View style={styles.certRow}>
             {item.profile.certifications.slice(0, 3).map((c) => (
               <View key={c} style={styles.certBadge}>
@@ -139,47 +138,21 @@ export function PSWListScreen() {
         <View style={styles.cardFooter}>
           <View style={[styles.approvalBadge, { backgroundColor: isApproved ? `${Colors.systemGreen}1A` : `${Colors.systemOrange}1A` }]}>
             <Text style={[styles.approvalText, { color: isApproved ? Colors.systemGreen : Colors.systemOrange }]}>
-              {isApproved ? 'Approved' : 'Pending'}
+              {isApproved ? '✓ Approved' : '⏳ Pending Review'}
             </Text>
           </View>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            {isApproved && (
-              <TouchableOpacity
-                style={styles.rejectBtn}
-                onPress={() => handleReject(item)}
-                activeOpacity={0.8}
-                disabled={rejectingId === item._id}
-              >
-                <Text style={styles.rejectBtnText}>
-                  {rejectingId === item._id ? '...' : 'Revoke'}
-                </Text>
-              </TouchableOpacity>
-            )}
-            {!isApproved && (
-              <TouchableOpacity
-                style={styles.rejectBtn}
-                onPress={() => handleReject(item)}
-                activeOpacity={0.8}
-                disabled={rejectingId === item._id || approvingId === item._id}
-              >
-                <Text style={styles.rejectBtnText}>
-                  {rejectingId === item._id ? '...' : 'Reject'}
-                </Text>
-              </TouchableOpacity>
-            )}
-            {!isApproved && (
-              <TouchableOpacity
-                style={styles.approveBtn}
-                onPress={() => handleApprove(item)}
-                activeOpacity={0.8}
-                disabled={approvingId === item._id || rejectingId === item._id}
-              >
-                <Text style={styles.approveBtnText}>
-                  {approvingId === item._id ? '...' : 'Approve'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          {!isApproved && (
+            <TouchableOpacity
+              style={styles.approveBtn}
+              onPress={() => handleApprove(item)}
+              activeOpacity={0.8}
+              disabled={approvingId === item._id}
+            >
+              <Text style={styles.approveBtnText}>
+                {approvingId === item._id ? '...' : 'Approve'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -285,6 +258,12 @@ const styles = StyleSheet.create({
   statusDot: { width: 10, height: 10, borderRadius: 5 },
 
   bio: { fontSize: 13, color: Colors.secondaryLabel, lineHeight: 18, marginBottom: 10 },
+  qualRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' },
+  qualBadge: { backgroundColor: Colors.onlineGreen + '20', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: Colors.onlineGreen + '40' },
+  qualText: { fontSize: 12, fontWeight: '700', color: Colors.onlineGreen },
+  qualDetail: { fontSize: 12, color: Colors.secondaryLabel, fontWeight: '500' },
+  licenseRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  licenseText: { fontSize: 12, color: Colors.secondaryLabel, backgroundColor: Colors.systemGray6, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   certRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
   certBadge: {
     backgroundColor: Colors.systemGray6,
@@ -308,14 +287,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   approveBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-
-  rejectBtn: {
-    backgroundColor: `${Colors.systemRed}1A`,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  rejectBtnText: { color: Colors.systemRed, fontSize: 14, fontWeight: '600' },
 
   empty: { alignItems: 'center', paddingTop: 60 },
   emptyIcon: { fontSize: 40, marginBottom: 12 },

@@ -1,235 +1,368 @@
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
+  Animated,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Booking, apiMyBookings } from '../../api/client';
-import { BookingCard } from '../../components/BookingCard';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { apiMyBookings, Booking } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
-import { CustomerStackParams } from '../../navigation/CustomerNavigator';
-import { Colors } from '../../utils/colors';
+import { Colors, ServiceAccentColors, ServiceIcons } from '../../utils/colors';
+import { BookingCard } from '../../components/BookingCard';
+import { BookingCardSkeleton } from '../../components/SkeletonLoader';
+import { StatusBadge } from '../../components/StatusBadge';
 
-type Nav = NativeStackNavigationProp<CustomerStackParams>;
-
-const SERVICE_TYPES = [
-  { icon: '🧼', label: 'Personal Care' },
-  { icon: '🤝', label: 'Companionship' },
-  { icon: '🍽️', label: 'Meal Prep' },
-  { icon: '💊', label: 'Medication' },
+const SERVICES = [
+  { id: '1', name: 'Personal Care',        icon: ServiceIcons['Personal Care'],        accent: ServiceAccentColors['Personal Care'],        bg: Colors.servicePersonal },
+  { id: '2', name: 'Companionship',         icon: ServiceIcons['Companionship'],         accent: ServiceAccentColors['Companionship'],         bg: Colors.serviceCompanion },
+  { id: '3', name: 'Meal Preparation',      icon: ServiceIcons['Meal Preparation'],      accent: ServiceAccentColors['Meal Preparation'],      bg: Colors.serviceMeal },
+  { id: '4', name: 'Medication Reminders',  icon: ServiceIcons['Medication Reminders'],  accent: ServiceAccentColors['Medication Reminders'],  bg: Colors.serviceMedication },
+  { id: '5', name: 'Light Housekeeping',    icon: ServiceIcons['Light Housekeeping'],    accent: ServiceAccentColors['Light Housekeeping'],    bg: Colors.serviceHousing },
+  { id: '6', name: 'Mobility Assistance',   icon: ServiceIcons['Mobility Assistance'],   accent: ServiceAccentColors['Mobility Assistance'],   bg: Colors.serviceMobility },
+  { id: '7', name: 'Post-Surgery Support',  icon: ServiceIcons['Post-Surgery Support'],  accent: ServiceAccentColors['Post-Surgery Support'],  bg: Colors.serviceSurgery },
 ];
+
+const ACTIVE_STATUSES = new Set(['REQUESTED', 'ACCEPTED', 'STARTED']);
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
 
 export function HomeScreen() {
   const { user } = useAuth();
-  const navigation = useNavigation<Nav>();
+  const nav = useNavigation<any>();
+  const insets = useSafeAreaInsets();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  const load = useCallback(async () => {
+  const activeBooking = bookings.find(b => ACTIVE_STATUSES.has(b.status));
+  const recentBookings = bookings.filter(b => !ACTIVE_STATUSES.has(b.status)).slice(0, 3);
+
+  const load = useCallback(async (showRefresh = false) => {
+    if (showRefresh) setRefreshing(true);
+    else setLoading(true);
     try {
-      const data = await apiMyBookings();
-      setBookings(data.bookings ?? []);
-    } catch {
-      setBookings([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+      const { bookings: data } = await apiMyBookings();
+      setBookings(data.sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()));
+    } catch {}
+    setLoading(false);
+    setRefreshing(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.2, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ]),
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [load]);
 
-  const activeBookings = bookings.filter(
-    (b) => b.status === 'REQUESTED' || b.status === 'ACCEPTED' || b.status === 'STARTED',
-  );
-  const recent = bookings[0];
+  const firstName = user?.name?.split(' ')[0] ?? 'there';
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const today = new Date().toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
 
-  const greeting = () => {
-    const h = new Date().getHours();
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
-  };
+  // Split services into rows of 2 for the grid
+  const serviceRows: typeof SERVICES[] = [];
+  for (let i = 0; i < SERVICES.length; i += 2) {
+    serviceRows.push(SERVICES.slice(i, i + 2));
+  }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: 40 }}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => load(true)}
+          tintColor="#fff"
+          progressBackgroundColor={Colors.heroNavy}
+        />
+      }
+    >
+      {/* ── Hero ─────────────────────────────────────────────────── */}
+      <LinearGradient
+        colors={[Colors.heroNavy, Colors.heroNavyLight, '#1E4976']}
+        style={[styles.hero, { paddingTop: insets.top + 16 }]}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>{greeting()},</Text>
-            <Text style={styles.name}>{user?.name?.split(' ')[0]} 👋</Text>
+        <View style={styles.heroTop}>
+          <View style={styles.locationPill}>
+            <Text style={styles.locationText}>📍 Greater Sudbury, ON</Text>
           </View>
-          <View style={styles.avatarCircle}>
-            <Text style={styles.avatarInitial}>
-              {user?.name?.[0]?.toUpperCase() ?? 'U'}
-            </Text>
+          <Pressable style={styles.avatarBtn} onPress={() => nav.navigate('ProfileTab')}>
+            <Text style={styles.avatarBtnText}>{user?.name?.[0]?.toUpperCase() ?? '?'}</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.greetRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greetingSub}>{today}</Text>
+            <Text style={styles.greetingMain}>{greeting},</Text>
+            <Text style={styles.greetingName}>{firstName} 👋</Text>
           </View>
         </View>
 
-        {/* Active jobs banner */}
-        {activeBookings.length > 0 && (
-          <TouchableOpacity
-            style={styles.activeBanner}
-            onPress={() => navigation.navigate('Bookings')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.activeBannerIcon}>🟢</Text>
-            <Text style={styles.activeBannerText}>
-              {activeBookings.length} active booking{activeBookings.length > 1 ? 's' : ''}
-            </Text>
-            <Text style={styles.activeBannerChevron}>›</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Quick actions */}
-        <Text style={styles.sectionTitle}>Book a Service</Text>
-        <View style={styles.servicesGrid}>
-          {SERVICE_TYPES.map((svc) => (
-            <TouchableOpacity
-              key={svc.label}
-              style={styles.serviceCard}
-              activeOpacity={0.75}
-              onPress={() => navigation.navigate('CreateBooking')}
-            >
-              <Text style={styles.serviceIcon}>{svc.icon}</Text>
-              <Text style={styles.serviceLabel}>{svc.label}</Text>
-            </TouchableOpacity>
+        <View style={styles.statsRow}>
+          {[
+            ['15+', 'Local PSWs'],
+            ['4.8 ⭐', 'Avg rating'],
+            ['$25/hr', 'Starting rate'],
+          ].map(([num, label], i) => (
+            <React.Fragment key={label}>
+              {i > 0 && <View style={styles.statDivider} />}
+              <View style={styles.statItem}>
+                <Text style={styles.statNum}>{num}</Text>
+                <Text style={styles.statLabel}>{label}</Text>
+              </View>
+            </React.Fragment>
           ))}
         </View>
+      </LinearGradient>
 
-        {/* Big CTA */}
-        <TouchableOpacity
-          style={styles.bookCTA}
-          activeOpacity={0.85}
-          onPress={() => navigation.navigate('CreateBooking')}
+      {/* ── Active Booking Banner ─────────────────────────────────── */}
+      {activeBooking && (
+        <Pressable
+          style={styles.activeBanner}
+          onPress={() => nav.navigate('BookingDetail', { booking: activeBooking })}
         >
-          <View>
-            <Text style={styles.bookCTATitle}>Need a PSW?</Text>
-            <Text style={styles.bookCTASubtitle}>Book a verified worker near you</Text>
-          </View>
-          <Text style={styles.bookCTAArrow}>→</Text>
-        </TouchableOpacity>
+          <LinearGradient
+            colors={['#ECFDF5', '#D1FAE5']}
+            style={styles.activeBannerGrad}
+          >
+            <View style={styles.activeBannerLeft}>
+              <Animated.View style={[styles.activeDot, { transform: [{ scale: pulseAnim }] }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.activeBannerTitle}>Active Booking</Text>
+                <Text style={styles.activeBannerSub}>
+                  {activeBooking.serviceType} · {formatDate(activeBooking.scheduledAt)} {formatTime(activeBooking.scheduledAt)}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.activeBannerRight}>
+              <StatusBadge status={activeBooking.status} />
+              <Text style={styles.activeBannerChevron}>›</Text>
+            </View>
+          </LinearGradient>
+        </Pressable>
+      )}
 
-        {/* Recent booking */}
-        {loading ? (
-          <ActivityIndicator style={{ marginTop: 24 }} color={Colors.systemBlue} />
-        ) : recent ? (
-          <>
-            <Text style={styles.sectionTitle}>Recent Booking</Text>
-            <BookingCard
-              booking={recent}
-              onPress={() => navigation.navigate('BookingDetail', { booking: recent })}
-            />
-          </>
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>📅</Text>
-            <Text style={styles.emptyTitle}>No bookings yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Book your first Personal Support Worker today.
-            </Text>
+      {/* ── Trust Badges ─────────────────────────────────────────── */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trustRow}>
+        {[
+          { icon: '🛡', label: 'Police Checked' },
+          { icon: '✅', label: 'ID Verified' },
+          { icon: '👮', label: 'Admin Approved' },
+          { icon: '🔒', label: 'Insured' },
+        ].map(b => (
+          <View key={b.label} style={styles.trustBadge}>
+            <Text style={styles.trustIcon}>{b.icon}</Text>
+            <Text style={styles.trustText}>{b.label}</Text>
           </View>
-        )}
+        ))}
       </ScrollView>
-    </SafeAreaView>
+
+      {/* ── Book CTA ─────────────────────────────────────────────── */}
+      <Pressable style={styles.bookCTA} onPress={() => nav.navigate('NewBooking')}>
+        <LinearGradient
+          colors={[Colors.systemBlue, Colors.systemBlueDark]}
+          style={styles.bookCTAGrad}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        >
+          <View style={styles.bookCTAContent}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.bookCTAText}>Book Care Now →</Text>
+              <Text style={styles.bookCTASub}>Available today · 15 km radius · 15 PSWs nearby</Text>
+            </View>
+            <View style={styles.bookCTABadge}>
+              <Text style={styles.bookCTABadgeText}>$25/hr</Text>
+            </View>
+          </View>
+        </LinearGradient>
+      </Pressable>
+
+      {/* ── Services Grid ─────────────────────────────────────────── */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionLabel}>SERVICES</Text>
+        <Text style={styles.sectionTitle}>What do you need?</Text>
+      </View>
+
+      <View style={styles.servicesGrid}>
+        {serviceRows.map((row, rowIdx) => (
+          <View key={rowIdx} style={styles.serviceGridRow}>
+            {row.map(item => (
+              <Pressable
+                key={item.id}
+                style={({ pressed }) => [
+                  styles.serviceGridCard,
+                  { backgroundColor: item.bg, borderColor: item.accent + '20' },
+                  pressed && { opacity: 0.88, transform: [{ scale: 0.97 }] },
+                ]}
+                onPress={() => nav.navigate('NewBooking')}
+              >
+                <View style={[styles.serviceGridIconWrap, { backgroundColor: item.accent + '18' }]}>
+                  <Text style={styles.serviceGridIcon}>{item.icon}</Text>
+                </View>
+                <Text style={[styles.serviceGridName, { color: Colors.label }]} numberOfLines={2}>{item.name}</Text>
+                <Text style={[styles.serviceGridArrow, { color: item.accent }]}>→</Text>
+              </Pressable>
+            ))}
+            {/* If odd row, fill with empty space */}
+            {row.length === 1 && <View style={styles.serviceGridCardEmpty} />}
+          </View>
+        ))}
+      </View>
+
+      {/* ── Recent Bookings ───────────────────────────────────────── */}
+      <View style={styles.sectionHeader}>
+        <View>
+          <Text style={styles.sectionLabel}>HISTORY</Text>
+          <Text style={styles.sectionTitle}>Recent Bookings</Text>
+        </View>
+        <Pressable onPress={() => nav.navigate('BookingsTab')} style={styles.seeAllBtn}>
+          <Text style={styles.seeAll}>See all →</Text>
+        </Pressable>
+      </View>
+
+      {loading ? (
+        <><BookingCardSkeleton /><BookingCardSkeleton /></>
+      ) : recentBookings.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyIcon}>📋</Text>
+          <Text style={styles.emptyTitle}>No bookings yet</Text>
+          <Text style={styles.emptySub}>Your booking history will appear here.</Text>
+        </View>
+      ) : (
+        recentBookings.map(b => (
+          <BookingCard key={b._id} booking={b} onPress={() => nav.navigate('BookingDetail', { booking: b })} />
+        ))
+      )}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.systemGroupedBackground },
-  scroll: { flex: 1 },
-  content: { paddingHorizontal: 20, paddingBottom: 32, paddingTop: 8 },
+  container: { flex: 1, backgroundColor: Colors.systemGroupedBackground },
 
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
+  // Hero
+  hero: { paddingHorizontal: 20, paddingBottom: 28 },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  locationPill: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
+  locationText: { color: '#fff', fontSize: 13, fontWeight: '500' },
+  avatarBtn: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)',
+    alignItems: 'center', justifyContent: 'center',
   },
-  greeting: { fontSize: 16, color: Colors.secondaryLabel, fontWeight: '400' },
-  name: { fontSize: 28, fontWeight: '700', color: Colors.label },
-  avatarCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: Colors.systemBlue,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitial: { color: '#fff', fontSize: 20, fontWeight: '700' },
+  avatarBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  greetRow: { marginBottom: 20 },
+  greetingSub: { color: 'rgba(255,255,255,0.6)', fontSize: 13, marginBottom: 4 },
+  greetingMain: { color: 'rgba(255,255,255,0.85)', fontSize: 22, fontWeight: '500' },
+  greetingName: { color: '#fff', fontSize: 32, fontWeight: '900', letterSpacing: -0.8 },
+  statsRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  statItem: { flex: 1, alignItems: 'center' },
+  statNum: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  statLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 2 },
+  statDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginHorizontal: 8 },
 
+  // Active banner
   activeBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: `${Colors.systemGreen}15`,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 24,
-    gap: 10,
+    marginHorizontal: 16, marginTop: 16,
+    borderRadius: 18, overflow: 'hidden',
+    shadowColor: Colors.trustGreen,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
-  activeBannerIcon: { fontSize: 14 },
-  activeBannerText: { flex: 1, fontSize: 15, fontWeight: '600', color: Colors.systemGreen },
-  activeBannerChevron: { fontSize: 20, color: Colors.systemGreen },
+  activeBannerGrad: { padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  activeBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  activeDot: {
+    width: 12, height: 12, borderRadius: 6, backgroundColor: Colors.onlineGreen,
+    shadowColor: Colors.onlineGreen, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 6,
+  },
+  activeBannerTitle: { fontSize: 14, fontWeight: '800', color: Colors.trustGreen },
+  activeBannerSub: { fontSize: 12, color: Colors.secondaryLabel, marginTop: 1 },
+  activeBannerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  activeBannerChevron: { fontSize: 22, color: Colors.trustGreen, fontWeight: '700' },
 
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.label,
-    marginBottom: 14,
-    marginTop: 4,
-  },
-
-  servicesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 20,
-  },
-  serviceCard: {
-    width: '47%',
+  // Trust badges
+  trustRow: { paddingHorizontal: 16, paddingVertical: 14, gap: 8 },
+  trustBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: Colors.systemBackground,
-    borderRadius: 16,
-    padding: 18,
-    alignItems: 'center',
-    gap: 8,
-    shadowColor: '#000',
+    borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7,
+    borderWidth: 1, borderColor: Colors.separator,
+    shadowColor: Colors.cardShadow,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 6,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  trustIcon: { fontSize: 13 },
+  trustText: { fontSize: 12, fontWeight: '600', color: Colors.secondaryLabel },
+
+  // Book CTA
+  bookCTA: { marginHorizontal: 16, marginTop: 4, marginBottom: 8, borderRadius: 20, overflow: 'hidden', shadowColor: Colors.systemBlue, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 8 },
+  bookCTAGrad: { padding: 22 },
+  bookCTAContent: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  bookCTAText: { color: '#fff', fontSize: 20, fontWeight: '900', letterSpacing: -0.4 },
+  bookCTASub: { color: 'rgba(255,255,255,0.72)', fontSize: 13, marginTop: 4 },
+  bookCTABadge: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+  bookCTABadgeText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+
+  // Section headers
+  sectionHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end',
+    paddingHorizontal: 20, marginBottom: 14, marginTop: 24,
+  },
+  sectionLabel: { fontSize: 11, fontWeight: '700', color: Colors.tertiaryLabel, letterSpacing: 1.2, marginBottom: 3 },
+  sectionTitle: { fontSize: 20, fontWeight: '800', color: Colors.label, letterSpacing: -0.4 },
+  seeAllBtn: { paddingBottom: 2 },
+  seeAll: { fontSize: 14, fontWeight: '600', color: Colors.systemBlue },
+
+  // Service grid
+  servicesGrid: { paddingHorizontal: 16, gap: 10, marginBottom: 8 },
+  serviceGridRow: { flexDirection: 'row', gap: 10 },
+  serviceGridCard: {
+    flex: 1, minHeight: 152, borderRadius: 18, padding: 16,
+    borderWidth: 1,
+    shadowColor: Colors.cardShadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
     elevation: 2,
-  },
-  serviceIcon: { fontSize: 32 },
-  serviceLabel: { fontSize: 13, fontWeight: '600', color: Colors.label, textAlign: 'center' },
-
-  bookCTA: {
-    backgroundColor: Colors.systemBlue,
-    borderRadius: 18,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 28,
   },
-  bookCTATitle: { fontSize: 18, fontWeight: '700', color: '#fff', marginBottom: 4 },
-  bookCTASubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.8)' },
-  bookCTAArrow: { fontSize: 28, color: '#fff' },
+  serviceGridCardEmpty: { flex: 1 },
+  serviceGridIconWrap: { width: 52, height: 52, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  serviceGridIcon: { fontSize: 26 },
+  serviceGridName: { fontSize: 14, fontWeight: '700', lineHeight: 19, flex: 1 },
+  serviceGridArrow: { fontSize: 18, fontWeight: '800', marginTop: 8 },
 
-  emptyState: { alignItems: 'center', paddingVertical: 40 },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: '600', color: Colors.label, marginBottom: 6 },
-  emptySubtitle: { fontSize: 14, color: Colors.secondaryLabel, textAlign: 'center', lineHeight: 20 },
+  // Empty / loading states
+  emptyState: { alignItems: 'center', paddingVertical: 40, paddingHorizontal: 24 },
+  emptyIcon: { fontSize: 44, marginBottom: 14 },
+  emptyTitle: { fontSize: 17, fontWeight: '700', color: Colors.label, marginBottom: 6 },
+  emptySub: { fontSize: 14, color: Colors.secondaryLabel, textAlign: 'center', lineHeight: 20 },
 });
