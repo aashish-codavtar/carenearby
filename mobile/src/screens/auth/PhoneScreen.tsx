@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { apiLogin } from '../../api/client';
 import { Colors } from '../../utils/colors';
@@ -78,15 +77,9 @@ export function PhoneScreen() {
       {/* ── Compact top bar ─────────────────────────────────────────── */}
       <View style={styles.topBar}>
         <View style={styles.logoRow}>
-          <LinearGradient
-            colors={['#1A6FFF', '#0044CC']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.logoIcon}
-          >
+          <View style={styles.logoIcon}>
             <Text style={styles.logoText}>C</Text>
-            <View style={styles.logoBadge}><Text style={styles.logoBadgeText}>✚</Text></View>
-          </LinearGradient>
+          </View>
           <View>
             <Text style={styles.appName}>CareNearby</Text>
             <Text style={styles.tagline}>Greater Sudbury, ON</Text>
@@ -237,15 +230,9 @@ export function PhoneScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
       
-      {/* Bottom gradient */}
-      <LinearGradient
-        colors={['#000000', '#1a1a1a', '#2d2d2d']}
-        style={styles.bottomGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-      >
-        <Text style={styles.bottomText}>© {new Date().getFullYear()} CareNearby · Professional PSW Services</Text>
-      </LinearGradient>
+      <View style={styles.bottomBar}>
+        <Text style={styles.bottomText}>© {new Date().getFullYear()} CareNearby · Greater Sudbury, ON</Text>
+      </View>
     </View>
   );
 }
@@ -260,17 +247,11 @@ const styles = StyleSheet.create({
   },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   logoIcon: {
-    width: 56, height: 56, borderRadius: 18, overflow: 'hidden',
+    width: 48, height: 48, borderRadius: 14,
+    backgroundColor: '#007AFF',
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#1A6FFF', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.5, shadowRadius: 14, elevation: 8,
   },
-  logoText: { color: '#fff', fontSize: 26, fontWeight: '900', letterSpacing: -1, marginTop: 2 },
-  logoBadge: {
-    position: 'absolute', top: 6, right: 6,
-    width: 16, height: 16, borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center',
-  },
-  logoBadgeText: { color: '#fff', fontSize: 9, fontWeight: '700' },
+  logoText: { color: '#fff', fontSize: 22, fontWeight: '800' },
   appName: { color: '#fff', fontSize: 20, fontWeight: '800' },
   tagline: { color: 'rgba(255,255,255,0.45)', fontSize: 12, marginTop: 1 },
 
@@ -367,11 +348,6 @@ const styles = StyleSheet.create({
   trustIcon: { fontSize: 20 },
   trustText: { fontSize: 11, color: '#666', fontWeight: '500' },
   
-  // Bottom gradient
-  bottomGradient: {
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-  },
+  bottomBar: { paddingVertical: 14, alignItems: 'center', backgroundColor: '#000' },
   bottomText: { fontSize: 11, color: 'rgba(255,255,255,0.35)', textAlign: 'center' },
 });
