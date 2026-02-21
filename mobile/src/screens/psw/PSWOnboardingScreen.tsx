@@ -208,11 +208,13 @@ export function PSWOnboardingScreen() {
                 returnKeyType="done"
               />
 
-              <IOSButton
-                title="Continue →"
-                onPress={() => setStep(2)}
-                style={{ marginTop: 24 }}
-              />
+              <View style={styles.navRow}>
+                <IOSButton
+                  title="Continue →"
+                  onPress={() => setStep(2)}
+                  style={{ flex: 1 }}
+                />
+              </View>
             </>
           )}
 
@@ -435,10 +437,11 @@ const styles = StyleSheet.create({
   pendingDesc: { fontSize: 13, color: Colors.secondaryLabel, lineHeight: 19 },
 
   // Nav row
-  navRow: { flexDirection: 'row', gap: 12, marginTop: 24, alignItems: 'center' },
+  navRow: { flexDirection: 'row', gap: 12, marginTop: 24 },
   backBtn: {
-    height: 54, paddingHorizontal: 18, justifyContent: 'center',
-    borderRadius: 14, borderWidth: 1.5, borderColor: Colors.systemGray4,
+    width: 80, height: 56, justifyContent: 'center', alignItems: 'center',
+    borderRadius: 16, borderWidth: 1.5, borderColor: Colors.systemGray4,
+    backgroundColor: Colors.systemBackground,
   },
   backBtnText: { fontSize: 15, fontWeight: '600', color: Colors.secondaryLabel },
 });

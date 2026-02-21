@@ -168,44 +168,46 @@ export function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      {/* ── Hero ────────────────────────────────────────────────────── */}
-      <LinearGradient
-        colors={['#000000', '#111111']}
-        style={[styles.hero, { paddingTop: insets.top + 20 }]}
-      >
-        {/* Avatar */}
-        <Pressable style={styles.avatarWrap} onPress={showPhotoOptions}>
-          {photoUri ? (
-            <Image source={{ uri: photoUri }} style={styles.avatarImg} />
-          ) : (
-            <View style={[styles.avatarCircle, { backgroundColor: roleColor }]}>
-              <Text style={styles.avatarInitial}>{initial}</Text>
-            </View>
-          )}
-          <View style={styles.editBadge}>
-            <Text style={styles.editBadgeText}>✎</Text>
-          </View>
-        </Pressable>
-
-        <Text style={styles.heroName}>{user?.name ?? '—'}</Text>
-
-        <View style={[styles.roleBadge, { backgroundColor: roleColor + '22', borderColor: roleColor + '44' }]}>
-          <Text>{roleIcon}</Text>
-          <Text style={[styles.roleBadgeText, { color: roleColor }]}>{roleLabel}</Text>
-          {isPSW && pswP?.approvedByAdmin && (
-            <View style={styles.verifiedDot} />
-          )}
-        </View>
-
-        <Text style={styles.heroLocation}>📍 Greater Sudbury, ON</Text>
-      </LinearGradient>
-
-      {/* ── Body ────────────────────────────────────────────────────── */}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Hero ──────────────────────────────────────────────────── */}
+        <LinearGradient
+          colors={['#0A1628', '#0D2042', '#1a1a2e']}
+          style={[styles.hero, { paddingTop: insets.top + 24 }]}
+        >
+          {/* Avatar */}
+          <Pressable style={styles.avatarWrap} onPress={showPhotoOptions}>
+            {photoUri ? (
+              <Image source={{ uri: photoUri }} style={styles.avatarImg} />
+            ) : (
+              <LinearGradient
+                colors={[roleColor, roleColor + 'CC']}
+                style={styles.avatarCircle}
+              >
+                <Text style={styles.avatarInitial}>{initial}</Text>
+              </LinearGradient>
+            )}
+            <View style={styles.editBadge}>
+              <Text style={styles.editBadgeText}>✎</Text>
+            </View>
+          </Pressable>
+
+          <Text style={styles.heroName}>{user?.name ?? '—'}</Text>
+
+          <View style={[styles.roleBadge, { backgroundColor: roleColor + '22', borderColor: roleColor + '55' }]}>
+            <Text style={styles.roleBadgeIcon}>{roleIcon}</Text>
+            <Text style={[styles.roleBadgeText, { color: roleColor }]}>{roleLabel}</Text>
+            {isPSW && pswP?.approvedByAdmin && (
+              <View style={[styles.verifiedDot, { backgroundColor: '#34C759' }]} />
+            )}
+          </View>
+
+          <Text style={styles.heroLocation}>📍 Greater Sudbury, ON</Text>
+          <View style={styles.heroBottom} />
+        </LinearGradient>
 
         {/* ── Account Identity ──────────────────────────────────────── */}
         <Section title="Account">
@@ -419,26 +421,29 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
 
   // Hero
-  hero: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 24 },
-  avatarWrap: { marginBottom: 14, position: 'relative' },
-  avatarImg: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: 'rgba(255,255,255,0.25)' },
-  avatarCircle: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center' },
-  avatarInitial: { color: '#fff', fontSize: 38, fontWeight: '800' },
+  hero: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 32 },
+  heroBottom: { height: 8 },
+  avatarWrap: { marginBottom: 16, position: 'relative' },
+  avatarImg: { width: 104, height: 104, borderRadius: 52, borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)' },
+  avatarCircle: { width: 104, height: 104, borderRadius: 52, alignItems: 'center', justifyContent: 'center' },
+  avatarInitial: { color: '#fff', fontSize: 40, fontWeight: '800' },
   editBadge: {
     position: 'absolute', bottom: 2, right: 2,
-    width: 30, height: 30, borderRadius: 15,
+    width: 32, height: 32, borderRadius: 16,
     backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: '#000',
+    borderWidth: 2.5, borderColor: '#0A1628',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4,
   },
-  editBadgeText: { fontSize: 13, color: '#000' },
-  heroName: { color: '#fff', fontSize: 22, fontWeight: '800', marginBottom: 10 },
+  editBadgeText: { fontSize: 14, color: '#0A1628' },
+  heroName: { color: '#fff', fontSize: 24, fontWeight: '800', marginBottom: 10, letterSpacing: -0.3 },
   roleBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, borderWidth: 1, marginBottom: 10,
+    paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, borderWidth: 1, marginBottom: 10,
   },
+  roleBadgeIcon: { fontSize: 14 },
   roleBadgeText: { fontSize: 13, fontWeight: '700' },
-  verifiedDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759' },
-  heroLocation: { color: 'rgba(255,255,255,0.45)', fontSize: 13 },
+  verifiedDot: { width: 7, height: 7, borderRadius: 4 },
+  heroLocation: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '500' },
 
   // Section
   section: { paddingHorizontal: 16, marginBottom: 4 },

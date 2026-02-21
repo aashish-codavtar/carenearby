@@ -42,11 +42,8 @@ export function PhoneScreen() {
 
   function formatName(raw: string) {
     return raw
-      .replace(/\s+/g, ' ')
       .replace(/\b\w/g, c => c.toUpperCase())
-      .replace(/\s+(And|&)\s*$/i, '')
-      .replace(/^\s*(And|&)\s+/i, '')
-      .replace(/\s+$/, '');
+      .slice(0, 50);
   }
 
   function getE164() {
@@ -104,7 +101,7 @@ export function PhoneScreen() {
       >
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+          contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -151,8 +148,9 @@ export function PhoneScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Phone Number</Text>
               <View style={styles.phoneRow}>
-                <View style={styles.countryCode}>
-                  <Text style={styles.countryCodeText}>🇨🇦 +1</Text>
+                <View style={styles.countryBadge}>
+                  <Text style={styles.countryFlag}>🇨🇦</Text>
+                  <Text style={styles.countryCode}>+1</Text>
                 </View>
                 <TextInput
                   style={[styles.textInput, styles.phoneInput]}
@@ -238,6 +236,16 @@ export function PhoneScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      
+      {/* Bottom gradient */}
+      <LinearGradient
+        colors={['#000000', '#1a1a1a', '#2d2d2d']}
+        style={styles.bottomGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+      >
+        <Text style={styles.bottomText}>© {new Date().getFullYear()} CareNearby · Professional PSW Services</Text>
+      </LinearGradient>
     </View>
   );
 }
@@ -269,6 +277,7 @@ const styles = StyleSheet.create({
   // Form
   formContainer: { flex: 1 },
   scrollView: { flex: 1 },
+  scrollContent: { flexGrow: 1, paddingBottom: 20 },
   formCard: {
     backgroundColor: '#fff',
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
@@ -298,14 +307,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 15,
     fontSize: 16, color: '#000', borderWidth: 1, borderColor: '#e8e8e8',
   },
-  phoneRow: { flexDirection: 'row', gap: 10 },
-  countryCode: {
-    backgroundColor: '#f8f8f8', borderRadius: 12,
+  phoneRow: { flexDirection: 'row', gap: 8, alignItems: 'stretch' },
+  countryBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: '#f0f0f0', borderRadius: 12,
     paddingHorizontal: 14, paddingVertical: 15,
-    justifyContent: 'center', borderWidth: 1, borderColor: '#e8e8e8',
+    borderWidth: 1, borderColor: '#e0e0e0',
   },
-  countryCodeText: { fontSize: 15, fontWeight: '600', color: '#333' },
-  phoneInput: { flex: 1 },
+  countryFlag: { fontSize: 18 },
+  countryCode: { fontSize: 15, fontWeight: '700', color: '#111' },
+  phoneInput: {
+    flex: 1, backgroundColor: '#f8f8f8', borderRadius: 12,
+    paddingHorizontal: 16, paddingVertical: 15,
+    fontSize: 17, color: '#000', borderWidth: 1, borderColor: '#e8e8e8',
+    fontWeight: '500', letterSpacing: 0.5,
+  },
 
   // Role cards
   roleRow: { flexDirection: 'row', gap: 10 },
@@ -350,4 +366,12 @@ const styles = StyleSheet.create({
   trustItem: { alignItems: 'center', gap: 4 },
   trustIcon: { fontSize: 20 },
   trustText: { fontSize: 11, color: '#666', fontWeight: '500' },
+  
+  // Bottom gradient
+  bottomGradient: {
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  bottomText: { fontSize: 11, color: 'rgba(255,255,255,0.35)', textAlign: 'center' },
 });
