@@ -6,6 +6,7 @@ import { BookingDetailScreen } from '../screens/customer/BookingDetailScreen';
 import { BookingsScreen } from '../screens/customer/BookingsScreen';
 import { CreateBookingScreen } from '../screens/customer/CreateBookingScreen';
 import { HomeScreen } from '../screens/customer/HomeScreen';
+import { HelpScreen } from '../screens/shared/HelpScreen';
 import { ProfileScreen } from '../screens/shared/ProfileScreen';
 import { Colors } from '../utils/colors';
 import { Booking } from '../api/client';
@@ -13,6 +14,7 @@ import { Booking } from '../api/client';
 export type CustomerStackParams = {
   Home: undefined;
   BookingDetail: { booking: Booking };
+  Help: undefined;
 };
 
 const Tab = createBottomTabNavigator();
@@ -96,6 +98,7 @@ export function CustomerNavigator() {
     >
       <Stack.Screen name="Home" component={HomeTabs} options={{ headerShown: false }} />
       <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ title: 'Booking Details' }} />
+      <Stack.Screen name="Help" component={HelpScreen} options={{ title: 'Help & Documentation' }} />
     </Stack.Navigator>
   );
 }

@@ -9,6 +9,7 @@ import { MyJobsScreen } from '../screens/psw/MyJobsScreen';
 import { EarningsScreen } from '../screens/psw/EarningsScreen';
 import { PSWDashboardScreen } from '../screens/psw/PSWDashboardScreen';
 import { PSWOnboardingScreen } from '../screens/psw/PSWOnboardingScreen';
+import { HelpScreen } from '../screens/shared/HelpScreen';
 import { ProfileScreen } from '../screens/shared/ProfileScreen';
 import { Colors } from '../utils/colors';
 import { Booking } from '../api/client';
@@ -17,6 +18,7 @@ export type PSWStackParams = {
   PSWHome: undefined;
   PSWOnboarding: undefined;
   JobDetail: { job: Booking };
+  Help: undefined;
 };
 
 const Tab = createBottomTabNavigator();
@@ -95,7 +97,6 @@ function PSWTabs() {
 
 export function PSWNavigator() {
   const { user } = useAuth();
-  // New PSW users who haven't completed credential onboarding start there
   const needsOnboarding = user?.role === 'PSW' && user?.onboardingComplete === false;
 
   return (
@@ -111,6 +112,7 @@ export function PSWNavigator() {
       <Stack.Screen name="PSWHome" component={PSWTabs} options={{ headerShown: false }} />
       <Stack.Screen name="PSWOnboarding" component={PSWOnboardingScreen} options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="JobDetail" component={JobDetailScreen} options={{ title: 'Job Details' }} />
+      <Stack.Screen name="Help" component={HelpScreen} options={{ title: 'Help & Documentation' }} />
     </Stack.Navigator>
   );
 }

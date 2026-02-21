@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const KEYS = {
   TOKEN: '@carenearby/token',
   USER: '@carenearby/user',
+  PHOTO_URI: '@carenearby/photo_uri',
 } as const;
 
 export interface StoredUser {
@@ -37,5 +38,17 @@ export const Storage = {
 
   async clearAuth(): Promise<void> {
     await AsyncStorage.multiRemove([KEYS.TOKEN, KEYS.USER]);
+  },
+
+  async savePhotoUri(uri: string): Promise<void> {
+    await AsyncStorage.setItem(KEYS.PHOTO_URI, uri);
+  },
+
+  async getPhotoUri(): Promise<string | null> {
+    return AsyncStorage.getItem(KEYS.PHOTO_URI);
+  },
+
+  async clearPhotoUri(): Promise<void> {
+    await AsyncStorage.removeItem(KEYS.PHOTO_URI);
   },
 };
