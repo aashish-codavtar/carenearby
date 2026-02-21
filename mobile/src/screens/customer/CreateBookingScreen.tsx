@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -16,6 +17,8 @@ import * as Haptics from 'expo-haptics';
 import { apiCreateBooking } from '../../api/client';
 import { IOSButton } from '../../components/IOSButton';
 import { Colors, ServiceColors, ServiceIcons } from '../../utils/colors';
+
+const SUDBURY_CENTER = { lat: 46.4917, lng: -80.9924 };
 
 const SERVICES = [
   'Personal Care',
@@ -90,12 +93,12 @@ export function CreateBookingScreen() {
             <Text style={styles.successDetailRow}>⏰ {formatTimeDisplay(date)}</Text>
             <Text style={styles.successDetailRow}>⏱ {hours} hours · ${total}</Text>
           </View>
-          <IOSButton
-            title="Book Another"
-            variant="outline"
+          <Pressable
+            style={({ pressed }) => [styles.bookAnotherBtn, pressed && styles.bookAnotherBtnPressed]}
             onPress={() => { setStep(0); setSuccess(false); setNotes(''); setHours(3); setDate(tomorrow9am()); }}
-            style={{ marginTop: 24 }}
-          />
+          >
+            <Text style={styles.bookAnotherBtnText}>Book Another</Text>
+          </Pressable>
         </LinearGradient>
       </View>
     );
@@ -168,7 +171,10 @@ export function CreateBookingScreen() {
                 );
               })}
             </View>
-            <IOSButton title="Next: Schedule →" onPress={() => setStep(1)} style={{ marginTop: 20 }} />
+            <Pressable style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]} onPress={() => setStep(1)}>
+              <Text style={styles.primaryBtnText}>Next: Schedule</Text>
+              <View style={styles.primaryBtnArrow}><Text style={styles.primaryBtnArrowText}>→</Text></View>
+            </Pressable>
           </View>
         )}
 
@@ -261,8 +267,13 @@ export function CreateBookingScreen() {
             </View>
 
             <View style={styles.navBtns}>
-              <IOSButton title="← Back" variant="outline" onPress={() => setStep(0)} style={{ flex: 1 }} />
-              <IOSButton title="Review →" onPress={() => setStep(2)} style={{ flex: 2 }} />
+              <Pressable style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]} onPress={() => setStep(0)}>
+                <Text style={styles.backBtnText}>← Back</Text>
+              </Pressable>
+              <Pressable style={({ pressed }) => [styles.primaryBtn, { flex: 2 }, pressed && styles.primaryBtnPressed]} onPress={() => setStep(2)}>
+                <Text style={styles.primaryBtnText}>Review</Text>
+                <View style={styles.primaryBtnArrow}><Text style={styles.primaryBtnArrowText}>→</Text></View>
+              </Pressable>
             </View>
           </View>
         )}
@@ -282,24 +293,50 @@ export function CreateBookingScreen() {
                 ['📅 Date', formatDateDisplay(date)],
                 ['⏰ Time', formatTimeDisplay(date)],
                 ['⏱ Duration', `${hours} hours`],
-                ['📍 Location', 'Greater Sudbury, ON'],
-                ['💳 Payment', 'Private pay · Cash/e-Transfer'],
               ].map(([label, value]) => (
                 <View key={label} style={styles.confirmDetail}>
                   <Text style={styles.confirmDetailLabel}>{label}</Text>
                   <Text style={styles.confirmDetailValue}>{value}</Text>
                 </View>
               ))}
-              {notes.trim().length > 0 && (
-                <>
-                  <View style={styles.confirmDivider} />
-                  <Text style={styles.confirmNotesLabel}>📝 Notes</Text>
-                  <Text style={styles.confirmNotes}>{notes.trim()}</Text>
-                </>
-              )}
             </View>
 
-            {/* Price breakdown */}
+            {/* Map Location Card */}
+            <Pressable style={styles.mapCard} onPress={() => Linking.openURL(`https://www.google.com/maps?q=${SUDBURY_CENTER.lat},${SUDBURY_CENTER.lng}`)}>
+              <View style={styles.mapPreview}>
+                <View style={styles.mapOverlay}>
+                  <Text style={styles.mapText}>📍 Greater Sudbury, ON</Text>
+                  <Text style={styles.mapSubtext}>Tap to view on map</Text>
+                </View>
+              </View>
+              <View style={styles.mapInfo}>
+                <View style={styles.mapInfoRow}>
+                  <Text style={styles.mapInfoIcon}>📍</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.mapInfoTitle}>Service Location</Text>
+                    <Text style={styles.mapInfoSub}>Greater Sudbury, ON</Text>
+                  </View>
+                  <Text style={styles.mapArrow}>→</Text>
+                </View>
+              </View>
+            </Pressable>
+
+            {/* Payment Info */}
+            <View style={styles.paymentCard}>
+              <View style={styles.paymentRow}>
+                <Text style={styles.paymentIcon}>💳</Text>
+                <Text style={styles.paymentText}>Private Pay</Text>
+                <Text style={styles.paymentSub}>Cash or e-Transfer</Text>
+              </View>
+            </View>
+
+            {notes.trim().length > 0 && (
+              <View style={styles.notesCard}>
+                <Text style={styles.notesLabel}>📝 Special Instructions</Text>
+                <Text style={styles.notesText}>{notes.trim()}</Text>
+              </View>
+            )}
+
             <View style={styles.priceCard}>
               <Text style={styles.priceTitle}>Price Estimate</Text>
               <View style={styles.priceRow}>
@@ -315,8 +352,12 @@ export function CreateBookingScreen() {
             </View>
 
             <View style={styles.navBtns}>
-              <IOSButton title="← Back" variant="outline" onPress={() => setStep(1)} style={{ flex: 1 }} />
-              <IOSButton title="Confirm Booking" loading={loading} onPress={submit} style={{ flex: 2 }} />
+              <Pressable style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]} onPress={() => setStep(1)}>
+                <Text style={styles.backBtnText}>← Back</Text>
+              </Pressable>
+              <Pressable style={({ pressed }) => [styles.confirmBtn, pressed && styles.confirmBtnPressed]} onPress={submit} disabled={loading}>
+                <Text style={styles.confirmBtnText}>{loading ? 'Confirming...' : 'Confirm Booking'}</Text>
+              </Pressable>
             </View>
           </View>
         )}
@@ -343,6 +384,45 @@ const styles = StyleSheet.create({
   stepLineActive: { backgroundColor: 'rgba(255,255,255,0.6)' },
   stepContent: { padding: 20 },
   stepTitle: { fontSize: 22, fontWeight: '800', color: Colors.label, marginBottom: 20 },
+  
+  primaryBtn: {
+    marginTop: 20,
+    backgroundColor: '#000',
+    borderRadius: 12,
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  primaryBtnPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  primaryBtnText: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  primaryBtnArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryBtnArrowText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
   serviceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   serviceOption: {
     width: '47%', backgroundColor: Colors.systemBackground, borderRadius: 16, padding: 14,
@@ -382,6 +462,48 @@ const styles = StyleSheet.create({
   notesInput: { backgroundColor: Colors.systemGray6, borderRadius: 10, padding: 12, fontSize: 15, color: Colors.label, minHeight: 80, marginBottom: 4 },
   charCount: { fontSize: 11, color: Colors.tertiaryLabel, textAlign: 'right' },
   navBtns: { flexDirection: 'row', gap: 10, marginTop: 20 },
+  backBtn: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#e5e5e5',
+  },
+  backBtnPressed: {
+    backgroundColor: '#f5f5f5',
+  },
+  backBtnText: {
+    color: '#666',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  confirmBtn: {
+    flex: 2,
+    backgroundColor: '#34C759',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#34C759',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  confirmBtnPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  confirmBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
   confirmCard: {
     backgroundColor: Colors.systemBackground, borderRadius: 18, padding: 20, marginBottom: 14,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 10, elevation: 4,
@@ -395,6 +517,42 @@ const styles = StyleSheet.create({
   confirmDetailValue: { fontSize: 14, fontWeight: '600', color: Colors.label },
   confirmNotesLabel: { fontSize: 13, fontWeight: '700', color: Colors.secondaryLabel, marginBottom: 6 },
   confirmNotes: { fontSize: 14, color: Colors.label, lineHeight: 20 },
+  
+  mapCard: {
+    backgroundColor: Colors.systemBackground, borderRadius: 18, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 10, elevation: 4, marginBottom: 14,
+  },
+  mapPreview: {
+    height: 120, backgroundColor: '#E8F5E9',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  mapOverlay: {
+    backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+  },
+  mapText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  mapSubtext: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 2 },
+  mapInfo: { padding: 16 },
+  mapInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  mapInfoIcon: { fontSize: 24 },
+  mapInfoTitle: { fontSize: 15, fontWeight: '700', color: Colors.label },
+  mapInfoSub: { fontSize: 13, color: Colors.secondaryLabel },
+  mapArrow: { fontSize: 18, color: Colors.systemBlue, fontWeight: '600' },
+
+  paymentCard: {
+    backgroundColor: '#F0F7FF', borderRadius: 16, padding: 16, marginBottom: 14,
+    borderWidth: 1, borderColor: '#007AFF20',
+  },
+  paymentRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  paymentIcon: { fontSize: 20 },
+  paymentText: { fontSize: 15, fontWeight: '700', color: Colors.label },
+  paymentSub: { fontSize: 13, color: Colors.secondaryLabel, flex: 1, textAlign: 'right' },
+
+  notesCard: {
+    backgroundColor: Colors.systemBackground, borderRadius: 16, padding: 16, marginBottom: 14,
+  },
+  notesLabel: { fontSize: 12, fontWeight: '700', color: Colors.secondaryLabel, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  notesText: { fontSize: 14, color: Colors.label, lineHeight: 20 },
+
   priceCard: { backgroundColor: Colors.systemBackground, borderRadius: 18, padding: 20, marginBottom: 14 },
   priceTitle: { fontSize: 16, fontWeight: '800', color: Colors.label, marginBottom: 14 },
   priceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
@@ -411,4 +569,22 @@ const styles = StyleSheet.create({
   successSub: { fontSize: 16, color: Colors.secondaryLabel, textAlign: 'center', lineHeight: 24, marginBottom: 24 },
   successDetail: { backgroundColor: '#fff', borderRadius: 16, padding: 20, width: '100%', gap: 10 },
   successDetailRow: { fontSize: 15, color: Colors.label, fontWeight: '500' },
+  bookAnotherBtn: {
+    marginTop: 24,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderWidth: 2,
+    borderColor: '#34C759',
+  },
+  bookAnotherBtnPressed: {
+    backgroundColor: '#F0FDF4',
+  },
+  bookAnotherBtnText: {
+    color: '#34C759',
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
 });

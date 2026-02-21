@@ -17,66 +17,98 @@ import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
 import { useAuth } from '../../context/AuthContext';
+import { apiGetProfile, UserProfile } from '../../api/client';
 import { Colors } from '../../utils/colors';
 import { Storage } from '../../utils/storage';
 
-const ROLE_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
-  CUSTOMER: { label: 'Client',           icon: '🛡️', color: '#007AFF' },
-  PSW:      { label: 'PSW Professional', icon: '💼', color: '#34C759' },
-  ADMIN:    { label: 'Administrator',    icon: '⚙️', color: '#5856D6' },
-};
-
-interface InfoRowProps {
-  label: string;
-  value: string;
-  icon?: string;
-  onPress?: () => void;
-  valueColor?: string;
-}
-
-function InfoRow({ label, value, icon, onPress, valueColor }: InfoRowProps) {
-  const Row = onPress ? Pressable : View;
+// ── Verified badge ─────────────────────────────────────────────────────────────
+function VerifiedChip({ label }: { label: string }) {
   return (
-    <Row style={styles.infoRow} onPress={onPress}>
-      <View style={styles.infoRowLeft}>
-        {icon && <Text style={styles.infoRowIcon}>{icon}</Text>}
-        <Text style={styles.infoRowLabel}>{label}</Text>
-      </View>
-      <Text style={[styles.infoRowValue, valueColor ? { color: valueColor } : undefined]} numberOfLines={1}>
-        {value}
-      </Text>
-      {onPress && <Text style={styles.infoRowChevron}>›</Text>}
-    </Row>
+    <View style={styles.verifiedChip}>
+      <Text style={styles.verifiedChipText}>✅ {label}</Text>
+    </View>
   );
 }
+
+// ── Simple info row ────────────────────────────────────────────────────────────
+function InfoRow({
+  icon, label, value, onPress, valueColor,
+}: { icon: string; label: string; value: string; onPress?: () => void; valueColor?: string }) {
+  const Wrap = onPress ? Pressable : View;
+  return (
+    <Wrap style={styles.infoRow} onPress={onPress}>
+      <View style={styles.infoLeft}>
+        <Text style={styles.infoIcon}>{icon}</Text>
+        <Text style={styles.infoLabel}>{label}</Text>
+      </View>
+      <View style={styles.infoRight}>
+        <Text style={[styles.infoValue, valueColor ? { color: valueColor } : undefined]} numberOfLines={1}>
+          {value}
+        </Text>
+        {onPress && <Text style={styles.infoChevron}>›</Text>}
+      </View>
+    </Wrap>
+  );
+}
+
+// ── Status chip ────────────────────────────────────────────────────────────────
+function StatusChip({ status }: { status: 'pending' | 'approved' | 'rejected' }) {
+  const config = {
+    pending:  { bg: '#FFF7ED', border: '#FED7AA', text: '#EA580C', label: '⏳ Pending Review' },
+    approved: { bg: '#F0FDF4', border: '#BBF7D0', text: '#16A34A', label: '✅ Approved' },
+    rejected: { bg: '#FFF1F2', border: '#FECDD3', text: '#DC2626', label: '❌ Not Approved' },
+  }[status];
+  return (
+    <View style={[styles.statusChip, { backgroundColor: config.bg, borderColor: config.border }]}>
+      <Text style={[styles.statusChipText, { color: config.text }]}>{config.label}</Text>
+    </View>
+  );
+}
+
+// ── Section wrapper ────────────────────────────────────────────────────────────
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.card}>{children}</View>
+    </View>
+  );
+}
+
+const DIVIDER = <View style={styles.divider} />;
 
 export function ProfileScreen() {
   const { user, signOut } = useAuth();
   const insets = useSafeAreaInsets();
   const nav    = useNavigation<any>();
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
 
-  const roleConfig = ROLE_CONFIG[user?.role ?? ''] ?? { label: user?.role ?? '', icon: '👤', color: '#8E8E93' };
+  const [photoUri,  setPhotoUri]  = useState<string | null>(null);
+  const [profile,   setProfile]   = useState<UserProfile | null>(null);
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
-  // Load persisted photo on mount
+  const isCustomer = user?.role === 'CUSTOMER';
+  const isPSW      = user?.role === 'PSW';
+  const isAdmin    = user?.role === 'ADMIN';
+
+  // Load persisted photo + full profile
   useEffect(() => {
     Storage.getPhotoUri().then(uri => { if (uri) setPhotoUri(uri); });
+    apiGetProfile().then(res => setProfile(res.user)).catch(() => {});
   }, []);
 
   async function pickPhoto() {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Needed', 'Please allow photo access in Settings to upload a profile photo.');
-        return;
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Needed', 'Please allow photo access in Settings.');
+          return;
+        }
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
+        allowsEditing: true, aspect: [1, 1], quality: 0.8,
       });
       if (!result.canceled && result.assets[0]) {
         const uri = result.assets[0].uri;
@@ -91,14 +123,10 @@ export function ProfileScreen() {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Needed', 'Please allow camera access in Settings to take a profile photo.');
+        Alert.alert('Permission Needed', 'Please allow camera access in Settings.');
         return;
       }
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
+      const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
       if (!result.canceled && result.assets[0]) {
         const uri = result.assets[0].uri;
         setPhotoUri(uri);
@@ -108,11 +136,8 @@ export function ProfileScreen() {
   }
 
   function showPhotoOptions() {
-    if (Platform.OS === 'web') {
-      pickPhoto();
-      return;
-    }
-    Alert.alert('Profile Photo', 'Choose how to update your photo', [
+    if (Platform.OS === 'web') { pickPhoto(); return; }
+    Alert.alert('Profile Photo', 'How would you like to update your photo?', [
       { text: '📷 Take Photo', onPress: takePhoto },
       { text: '🖼 Choose from Library', onPress: pickPhoto },
       { text: 'Cancel', style: 'cancel' },
@@ -121,7 +146,7 @@ export function ProfileScreen() {
 
   function handleSignOut() {
     if (Platform.OS === 'web') {
-      if (window.confirm('Are you sure you want to sign out?')) signOut();
+      if (window.confirm('Sign out of CareNearby?')) signOut();
       return;
     }
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -130,19 +155,30 @@ export function ProfileScreen() {
     ]);
   }
 
-  const initial = user?.name?.[0]?.toUpperCase() ?? '?';
+  const pswP = profile?.pswProfile;
+  const approvalStatus: 'pending' | 'approved' | 'rejected' =
+    !pswP ? 'pending' :
+    pswP.approvedByAdmin ? 'approved' : 'pending';
+
+  const roleLabel = isCustomer ? 'Client' : isPSW ? 'PSW Professional' : 'Administrator';
+  const roleColor = isCustomer ? '#007AFF' : isPSW ? '#34C759' : '#5856D6';
+  const roleIcon  = isCustomer ? '🛡️' : isPSW ? '💼' : '⚙️';
+  const initial   = user?.name?.[0]?.toUpperCase() ?? '?';
+  const accountId = user?.id ? `CN-${user.id.slice(-6).toUpperCase()}` : '—';
 
   return (
     <View style={styles.container}>
+      {/* ── Hero ────────────────────────────────────────────────────── */}
       <LinearGradient
-        colors={['#000000', '#1a1a1a']}
+        colors={['#000000', '#111111']}
         style={[styles.hero, { paddingTop: insets.top + 20 }]}
       >
+        {/* Avatar */}
         <Pressable style={styles.avatarWrap} onPress={showPhotoOptions}>
           {photoUri ? (
-            <Image source={{ uri: photoUri }} style={styles.avatarImage} />
+            <Image source={{ uri: photoUri }} style={styles.avatarImg} />
           ) : (
-            <View style={styles.avatarCircle}>
+            <View style={[styles.avatarCircle, { backgroundColor: roleColor }]}>
               <Text style={styles.avatarInitial}>{initial}</Text>
             </View>
           )}
@@ -152,109 +188,226 @@ export function ProfileScreen() {
         </Pressable>
 
         <Text style={styles.heroName}>{user?.name ?? '—'}</Text>
-        <View style={[styles.roleBadge, { backgroundColor: roleConfig.color + '20', borderColor: roleConfig.color + '40' }]}>
-          <Text style={styles.roleBadgeIcon}>{roleConfig.icon}</Text>
-          <Text style={[styles.roleBadgeText, { color: roleConfig.color }]}>{roleConfig.label}</Text>
+
+        <View style={[styles.roleBadge, { backgroundColor: roleColor + '22', borderColor: roleColor + '44' }]}>
+          <Text>{roleIcon}</Text>
+          <Text style={[styles.roleBadgeText, { color: roleColor }]}>{roleLabel}</Text>
+          {isPSW && pswP?.approvedByAdmin && (
+            <View style={styles.verifiedDot} />
+          )}
         </View>
+
         <Text style={styles.heroLocation}>📍 Greater Sudbury, ON</Text>
       </LinearGradient>
 
+      {/* ── Body ────────────────────────────────────────────────────── */}
       <ScrollView
-        style={styles.scrollView}
+        style={styles.scroll}
         contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          <View style={styles.card}>
-            <InfoRow label="Phone" value={user?.phone ?? '—'} icon="📱" />
-            <View style={styles.divider} />
-            <InfoRow label="Account ID" value={user?.id ? `CN-${user.id.slice(-6).toUpperCase()}` : '—'} icon="🔑" />
-            <View style={styles.divider} />
-            <InfoRow label="Role" value={roleConfig.label} icon={roleConfig.icon} />
-          </View>
-        </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>App Info</Text>
-          <View style={styles.card}>
-            <InfoRow label="Version" value={`v${appVersion}`} icon="📦" />
-            <View style={styles.divider} />
-            <InfoRow label="Region" value="Greater Sudbury, ON 🇨🇦" icon="🗺️" />
-            <View style={styles.divider} />
-            <InfoRow label="Coverage" value="15 km radius" icon="📍" />
-            <View style={styles.divider} />
-            <InfoRow label="Rate" value="$25/hr · 3hr minimum" icon="💳" />
-            <View style={styles.divider} />
-            <InfoRow
-              label="Support"
-              value="support@carenearby.ca"
-              icon="✉️"
-              onPress={() => Linking.openURL('mailto:support@carenearby.ca?subject=CareNearby Support')}
-              valueColor="#007AFF"
-            />
+        {/* ── Account Identity ──────────────────────────────────────── */}
+        <Section title="Account">
+          <InfoRow icon="📱" label="Phone" value={user?.phone ?? '—'} />
+          <View style={styles.verifiedRow}>
+            <VerifiedChip label="OTP Verified" />
           </View>
-        </View>
+          {DIVIDER}
+          <InfoRow icon="🔑" label="Account ID" value={accountId} />
+          {DIVIDER}
+          <InfoRow icon={roleIcon} label="Role" value={roleLabel} />
+        </Section>
 
-        {/* Help & Documentation */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Help</Text>
-          <View style={styles.card}>
-            <Pressable
-              style={({ pressed }) => [styles.infoRow, pressed && { opacity: 0.7 }]}
-              onPress={() => nav.navigate('Help')}
-            >
-              <View style={styles.infoRowLeft}>
-                <Text style={styles.infoRowIcon}>📖</Text>
-                <View>
-                  <Text style={[styles.infoRowLabel, { color: '#000', fontWeight: '600' }]}>Help & Documentation</Text>
-                  <Text style={styles.helpSubtext}>Features, booking guide, verification</Text>
-                </View>
-              </View>
-              <Text style={styles.infoRowChevron}>›</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {user?.role === 'CUSTOMER' && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Trust & Safety</Text>
-            <View style={styles.card}>
-              {[
-                { icon: '🛡️', label: 'Police Checked',  desc: 'All PSWs pass criminal record check' },
-                { icon: '✅', label: 'ID Verified',      desc: 'Government-issued ID confirmed' },
-                { icon: '👮', label: 'Admin Approved',   desc: 'Manually reviewed by our team' },
-                { icon: '💰', label: 'Secure Payments',  desc: 'Protected payment processing' },
-              ].map((t, i) => (
-                <View key={t.label}>
-                  {i > 0 && <View style={styles.divider} />}
-                  <View style={styles.trustRow}>
-                    <View style={styles.trustIconWrap}>
-                      <Text style={styles.trustIcon}>{t.icon}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.trustLabel}>{t.label}</Text>
-                      <Text style={styles.trustDesc}>{t.desc}</Text>
-                    </View>
-                  </View>
-                </View>
-              ))}
+        {/* ── PSW: Professional Verification ───────────────────────── */}
+        {isPSW && (
+          <Section title="Professional Verification">
+            {/* Approval status */}
+            <View style={styles.approvalRow}>
+              <StatusChip status={approvalStatus} />
             </View>
-          </View>
+
+            {pswP ? (
+              <>
+                {DIVIDER}
+                {pswP.experienceYears > 0 && (
+                  <>
+                    <InfoRow icon="🏅" label="Experience" value={`${pswP.experienceYears} years`} />
+                    {DIVIDER}
+                  </>
+                )}
+                {(pswP.languages?.length ?? 0) > 0 && (
+                  <>
+                    <InfoRow icon="🌐" label="Languages" value={pswP.languages!.join(' · ')} />
+                    {DIVIDER}
+                  </>
+                )}
+                {(pswP.specialties?.length ?? 0) > 0 && (
+                  <>
+                    <View style={styles.specialtiesRow}>
+                      <Text style={styles.infoLabel}>🎯 Specialties</Text>
+                      <View style={styles.chips}>
+                        {pswP.specialties!.slice(0, 4).map(s => (
+                          <View key={s} style={styles.chip}>
+                            <Text style={styles.chipText}>{s}</Text>
+                          </View>
+                        ))}
+                        {pswP.specialties!.length > 4 && (
+                          <View style={styles.chip}>
+                            <Text style={styles.chipText}>+{pswP.specialties!.length - 4} more</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                    {DIVIDER}
+                  </>
+                )}
+                <View style={styles.checkGrid}>
+                  {[
+                    { icon: '🚑', label: 'First Aid', ok: !!pswP.certifications?.includes('firstAid') },
+                    { icon: '🛡️', label: 'Police Check', ok: !!pswP.policeCheckCleared },
+                    { icon: '✅', label: 'ID Verified', ok: pswP.approvedByAdmin },
+                    { icon: '👮', label: 'Admin Approved', ok: pswP.approvedByAdmin },
+                  ].map(item => (
+                    <View key={item.label} style={styles.checkCell}>
+                      <Text style={styles.checkCellIcon}>{item.icon}</Text>
+                      <Text style={[styles.checkCellStatus, { color: item.ok ? '#16A34A' : '#EA580C' }]}>
+                        {item.ok ? '✅' : '⏳'}
+                      </Text>
+                      <Text style={styles.checkCellLabel}>{item.label}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            ) : (
+              <View style={styles.noProfileNote}>
+                <Text style={styles.noProfileText}>Complete your credential onboarding to see verification status.</Text>
+              </View>
+            )}
+          </Section>
         )}
 
+        {/* ── Customer: Verification Status ────────────────────────── */}
+        {isCustomer && (
+          <Section title="Account Verification">
+            <View style={styles.customerVerification}>
+              <View style={styles.checkCell}>
+                <Text style={styles.checkCellIcon}>📱</Text>
+                <Text style={[styles.checkCellStatus, { color: '#16A34A' }]}>✅</Text>
+                <Text style={styles.checkCellLabel}>Phone{'\n'}Verified</Text>
+              </View>
+              <View style={styles.checkCell}>
+                <Text style={styles.checkCellIcon}>🔑</Text>
+                <Text style={[styles.checkCellStatus, { color: '#16A34A' }]}>✅</Text>
+                <Text style={styles.checkCellLabel}>Account{'\n'}Active</Text>
+              </View>
+              <View style={styles.checkCell}>
+                <Text style={styles.checkCellIcon}>💳</Text>
+                <Text style={[styles.checkCellStatus, { color: '#16A34A' }]}>✅</Text>
+                <Text style={styles.checkCellLabel}>Private{'\n'}Pay</Text>
+              </View>
+              <View style={styles.checkCell}>
+                <Text style={styles.checkCellIcon}>🛡️</Text>
+                <Text style={[styles.checkCellStatus, { color: '#16A34A' }]}>✅</Text>
+                <Text style={styles.checkCellLabel}>PSWs{'\n'}Verified</Text>
+              </View>
+            </View>
+          </Section>
+        )}
+
+        {/* ── PSW: Earnings Info ────────────────────────────────────── */}
+        {isPSW && (
+          <Section title="Earnings">
+            <View style={styles.earningsCard}>
+              <View style={styles.earningsItem}>
+                <Text style={styles.earningsNum}>$25</Text>
+                <Text style={styles.earningsLabel}>Per Hour</Text>
+              </View>
+              <View style={styles.earningsDivider} />
+              <View style={styles.earningsItem}>
+                <Text style={styles.earningsNum}>3h</Text>
+                <Text style={styles.earningsLabel}>Min. Session</Text>
+              </View>
+              <View style={styles.earningsDivider} />
+              <View style={styles.earningsItem}>
+                <Text style={styles.earningsNum}>$75+</Text>
+                <Text style={styles.earningsLabel}>Min. Earn</Text>
+              </View>
+            </View>
+          </Section>
+        )}
+
+        {/* ── Customer: Trust & Safety ──────────────────────────────── */}
+        {isCustomer && (
+          <Section title="Trust & Safety">
+            {[
+              { icon: '🛡️', label: 'Police Checked',  desc: 'All PSWs pass criminal record check' },
+              { icon: '✅', label: 'ID Verified',      desc: 'Government-issued ID confirmed' },
+              { icon: '👮', label: 'Admin Approved',   desc: 'Manually reviewed by our team' },
+              { icon: '⭐', label: 'Rating System',    desc: '1–5 stars after every session' },
+            ].map((t, i) => (
+              <View key={t.label}>
+                {i > 0 && DIVIDER}
+                <View style={styles.trustRow}>
+                  <View style={styles.trustIconWrap}><Text style={styles.trustIcon}>{t.icon}</Text></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.trustLabel}>{t.label}</Text>
+                    <Text style={styles.trustDesc}>{t.desc}</Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </Section>
+        )}
+
+        {/* ── Help & Documentation ──────────────────────────────────── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Help</Text>
+          <Pressable
+            style={({ pressed }) => [styles.helpCard, pressed && { opacity: 0.8 }]}
+            onPress={() => nav.navigate('Help')}
+          >
+            <LinearGradient colors={['#1a1a1a', '#2d2d2d']} style={styles.helpCardGrad}>
+              <View style={styles.helpCardLeft}>
+                <Text style={styles.helpCardIcon}>📖</Text>
+                <View>
+                  <Text style={styles.helpCardTitle}>Help & Documentation</Text>
+                  <Text style={styles.helpCardSub}>Platform guide · Booking help · PSW verification</Text>
+                </View>
+              </View>
+              <Text style={styles.helpCardArrow}>→</Text>
+            </LinearGradient>
+          </Pressable>
+        </View>
+
+        {/* ── App Info ──────────────────────────────────────────────── */}
+        <Section title="App Info">
+          <InfoRow icon="📦" label="Version" value={`v${appVersion}`} />
+          {DIVIDER}
+          <InfoRow icon="🗺️" label="Region" value="Greater Sudbury, ON 🇨🇦" />
+          {DIVIDER}
+          <InfoRow icon="📍" label="Coverage" value="15 km radius" />
+          {DIVIDER}
+          <InfoRow
+            icon="✉️" label="Support" value="support@carenearby.ca"
+            valueColor="#007AFF"
+            onPress={() => Linking.openURL('mailto:support@carenearby.ca?subject=CareNearby Support')}
+          />
+        </Section>
+
+        {/* ── Sign Out ──────────────────────────────────────────────── */}
         <View style={styles.section}>
           <Pressable
-            style={({ pressed }) => [styles.signOutButton, pressed && styles.signOutButtonPressed]}
+            style={({ pressed }) => [styles.signOutBtn, pressed && { opacity: 0.8 }]}
             onPress={handleSignOut}
           >
-            <Text style={styles.signOutButtonText}>Sign Out</Text>
+            <Text style={styles.signOutText}>Sign Out</Text>
           </Pressable>
         </View>
 
         <Text style={styles.footer}>
-          © {new Date().getFullYear()} CareNearby{'\n'}
-          Professional PSW Services in Greater Sudbury
+          © {new Date().getFullYear()} CareNearby · Professional PSW Services{'\n'}
+          Greater Sudbury, ON
         </Text>
       </ScrollView>
     </View>
@@ -263,15 +416,14 @@ export function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
-  scrollView: { flex: 1 },
-  hero: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 28 },
-  avatarWrap: { marginBottom: 16, position: 'relative' },
-  avatarImage: { width: 96, height: 96, borderRadius: 48, borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)' },
-  avatarCircle: {
-    width: 96, height: 96, borderRadius: 48,
-    backgroundColor: '#007AFF', alignItems: 'center', justifyContent: 'center',
-  },
-  avatarInitial: { color: '#fff', fontSize: 36, fontWeight: '700' },
+  scroll: { flex: 1 },
+
+  // Hero
+  hero: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 24 },
+  avatarWrap: { marginBottom: 14, position: 'relative' },
+  avatarImg: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: 'rgba(255,255,255,0.25)' },
+  avatarCircle: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center' },
+  avatarInitial: { color: '#fff', fontSize: 38, fontWeight: '800' },
   editBadge: {
     position: 'absolute', bottom: 2, right: 2,
     width: 30, height: 30, borderRadius: 15,
@@ -279,47 +431,109 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: '#000',
   },
   editBadgeText: { fontSize: 13, color: '#000' },
-  heroName: { color: '#fff', fontSize: 22, fontWeight: '700', marginBottom: 10 },
+  heroName: { color: '#fff', fontSize: 22, fontWeight: '800', marginBottom: 10 },
   roleBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: 16, borderWidth: 1, marginBottom: 10,
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, borderWidth: 1, marginBottom: 10,
   },
-  roleBadgeIcon: { fontSize: 14 },
-  roleBadgeText: { fontSize: 13, fontWeight: '600' },
-  heroLocation: { color: 'rgba(255,255,255,0.5)', fontSize: 13 },
+  roleBadgeText: { fontSize: 13, fontWeight: '700' },
+  verifiedDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759' },
+  heroLocation: { color: 'rgba(255,255,255,0.45)', fontSize: 13 },
 
+  // Section
   section: { paddingHorizontal: 16, marginBottom: 4 },
   sectionTitle: {
-    fontSize: 12, fontWeight: '600', color: '#666',
-    textTransform: 'uppercase', letterSpacing: 0.5,
-    paddingHorizontal: 4, marginBottom: 8, marginTop: 20,
+    fontSize: 11, fontWeight: '700', color: '#888',
+    textTransform: 'uppercase', letterSpacing: 0.8,
+    marginBottom: 8, marginTop: 20, paddingHorizontal: 4,
   },
   card: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 1,
+    backgroundColor: '#fff', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 14,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2,
   },
   divider: { height: 1, backgroundColor: '#f0f0f0', marginVertical: 12 },
-  infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  infoRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  infoRowIcon: { fontSize: 16 },
-  infoRowLabel: { fontSize: 14, color: '#666' },
-  infoRowValue: { fontSize: 14, fontWeight: '500', color: '#000', textAlign: 'right', marginLeft: 8 },
-  infoRowChevron: { fontSize: 20, color: '#ccc', marginLeft: 4 },
-  helpSubtext: { fontSize: 11, color: '#999', marginTop: 1 },
 
+  // Info row
+  infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  infoLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  infoIcon: { fontSize: 16 },
+  infoLabel: { fontSize: 14, color: '#666' },
+  infoRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  infoValue: { fontSize: 14, fontWeight: '600', color: '#000', textAlign: 'right' },
+  infoChevron: { fontSize: 20, color: '#ccc' },
+
+  // Verified chip
+  verifiedRow: { marginTop: 6 },
+  verifiedChip: {
+    backgroundColor: '#F0FDF4', borderRadius: 8, borderWidth: 1, borderColor: '#BBF7D0',
+    paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start',
+  },
+  verifiedChipText: { fontSize: 12, fontWeight: '600', color: '#16A34A' },
+
+  // Status chip
+  approvalRow: { marginBottom: 4 },
+  statusChip: {
+    borderRadius: 10, borderWidth: 1.5,
+    paddingHorizontal: 14, paddingVertical: 8, alignSelf: 'flex-start',
+  },
+  statusChipText: { fontSize: 14, fontWeight: '700' },
+
+  // Specialties
+  specialtiesRow: { gap: 10 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  chip: {
+    backgroundColor: '#EFF6FF', borderRadius: 20,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderWidth: 1, borderColor: '#BFDBFE',
+  },
+  chipText: { fontSize: 11, fontWeight: '600', color: '#1D4ED8' },
+
+  // Check grid (2x2 for PSW and Customer verif.)
+  checkGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 4 },
+  customerVerification: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 8 },
+  checkCell: { alignItems: 'center', gap: 4, minWidth: 70 },
+  checkCellIcon: { fontSize: 24 },
+  checkCellStatus: { fontSize: 16 },
+  checkCellLabel: { fontSize: 11, fontWeight: '600', color: '#666', textAlign: 'center' },
+
+  // Earnings
+  earningsCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
+  earningsItem: { flex: 1, alignItems: 'center' },
+  earningsNum: { fontSize: 24, fontWeight: '900', color: '#000', letterSpacing: -0.5 },
+  earningsLabel: { fontSize: 11, color: '#888', marginTop: 2, fontWeight: '600' },
+  earningsDivider: { width: 1, height: 36, backgroundColor: '#eee' },
+
+  // No profile note
+  noProfileNote: { paddingVertical: 8 },
+  noProfileText: { fontSize: 13, color: '#888', lineHeight: 19 },
+
+  // Trust
   trustRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   trustIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#f5f5f5', alignItems: 'center', justifyContent: 'center' },
   trustIcon: { fontSize: 16 },
   trustLabel: { fontSize: 14, fontWeight: '600', color: '#000', marginBottom: 2 },
   trustDesc: { fontSize: 12, color: '#666' },
 
-  signOutButton: {
-    marginTop: 8, borderRadius: 14,
-    backgroundColor: '#fff', borderWidth: 2, borderColor: '#ff3b30',
-    paddingVertical: 16, alignItems: 'center', justifyContent: 'center',
+  // Help card (prominent dark card)
+  helpCard: {
+    borderRadius: 18, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 6,
+    marginTop: -2,
   },
-  signOutButtonPressed: { backgroundColor: '#FFF5F5' },
-  signOutButtonText: { color: '#ff3b30', fontSize: 16, fontWeight: '700' },
-  footer: { textAlign: 'center', fontSize: 11, color: '#999', marginTop: 24, marginHorizontal: 20, lineHeight: 16 },
+  helpCardGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18 },
+  helpCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
+  helpCardIcon: { fontSize: 28 },
+  helpCardTitle: { fontSize: 15, fontWeight: '700', color: '#fff', marginBottom: 3 },
+  helpCardSub: { fontSize: 12, color: 'rgba(255,255,255,0.55)' },
+  helpCardArrow: { color: '#fff', fontSize: 20, fontWeight: '700' },
+
+  // Sign out
+  signOutBtn: {
+    marginTop: 8, borderRadius: 14, backgroundColor: '#fff',
+    borderWidth: 2, borderColor: '#FF3B30',
+    paddingVertical: 16, alignItems: 'center',
+  },
+  signOutText: { color: '#FF3B30', fontSize: 16, fontWeight: '700' },
+
+  footer: { textAlign: 'center', fontSize: 11, color: '#bbb', marginTop: 24, marginHorizontal: 20, lineHeight: 16 },
 });

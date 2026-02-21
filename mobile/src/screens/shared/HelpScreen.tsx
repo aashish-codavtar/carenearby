@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 function CheckRow({
@@ -37,6 +38,7 @@ type SectionKey = 'platform' | 'booking' | 'psw' | 'services' | 'pricing' | 'cov
 
 export function HelpScreen() {
   const insets = useSafeAreaInsets();
+  const nav    = useNavigation<any>();
   const [expanded, setExpanded] = useState<SectionKey | null>('booking');
 
   const toggle = (key: SectionKey) => setExpanded(prev => prev === key ? null : key);
@@ -69,7 +71,7 @@ export function HelpScreen() {
         <View style={styles.sectionBody}>
           <StepRow step={1} title="Choose Your Service" desc="Select from 7 personal care service types" />
           <StepRow step={2} title="Pick a Date" desc="Tap to advance to your preferred date" />
-          <StepRow step={3} title="Set Start Time" desc="Choose from preset time slots (7am – 5pm)" />
+          <StepRow step={3} title="Set Start Time" desc="Choose from preset time slots (7 am – 5 pm)" />
           <StepRow step={4} title="Set Duration" desc="Minimum 3 hours, up to 12 hours" />
           <StepRow step={5} title="Add Instructions" desc="Optional notes for the PSW (mobility, meds, etc.)" />
           <StepRow step={6} title="Review & Confirm" desc="Price estimate shown — submit request" />
@@ -134,7 +136,6 @@ export function HelpScreen() {
             ['💵', 'Private Pay', 'Not covered by OHIP or provincial insurance'],
             ['💸', 'Cash or e-Transfer', 'Paid directly to PSW at time of service'],
             ['🧾', 'Price shown upfront', 'No hidden fees or platform surcharges'],
-            ['📊', 'Rate set by platform', 'Standardized $25/hr for all services'],
           ] as [string, string, string][]).map(([icon, label, desc]) => (
             <CheckRow key={label} icon={icon} label={label} desc={desc} status="info" />
           ))}
@@ -177,7 +178,7 @@ export function HelpScreen() {
           <CheckRow icon="🚫" label="PSW Rejection & Suspension" desc="Admin can suspend any PSW account" />
           <CheckRow icon="❌" label="Booking Cancellation" desc="Customers can cancel REQUESTED bookings" />
           <CheckRow icon="📍" label="Location Verification" desc="PSW must be within 15 km of Sudbury" />
-          <CheckRow icon="🔔" label="Live Status Updates" desc="Booking status: Requested → Accepted → Started → Completed" />
+          <CheckRow icon="🔔" label="Live Status Updates" desc="Requested → Accepted → Started → Completed" />
         </View>
       ),
     },
@@ -228,51 +229,77 @@ export function HelpScreen() {
   ];
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
-      showsVerticalScrollIndicator={false}
-    >
-      <LinearGradient
-        colors={['#000000', '#1a1a1a']}
-        style={[styles.hero, { paddingTop: insets.top + 16 }]}
-      >
-        <Text style={styles.heroIcon}>📖</Text>
-        <Text style={styles.heroTitle}>Help & Documentation</Text>
-        <Text style={styles.heroSub}>CareNearby platform guide · Fonctionnalités vérifiées</Text>
-        <View style={styles.versionBadge}>
-          <Text style={styles.versionText}>v1.0.0 · Greater Sudbury, ON</Text>
-        </View>
-      </LinearGradient>
-
-      <View style={styles.body}>
-        {sections.map(section => (
-          <View key={section.key} style={styles.card}>
-            <Pressable
-              style={({ pressed }) => [styles.cardHeader, pressed && { opacity: 0.85 }]}
-              onPress={() => toggle(section.key)}
-            >
-              <Text style={styles.cardIcon}>{section.icon}</Text>
-              <Text style={styles.cardTitle}>{section.title}</Text>
-              <Text style={styles.cardChevron}>{expanded === section.key ? '▲' : '▼'}</Text>
-            </Pressable>
-            {expanded === section.key && section.content}
-          </View>
-        ))}
-
-        <Text style={styles.footer}>
-          © {new Date().getFullYear()} CareNearby · Professional PSW Services{'\n'}
-          Greater Sudbury, ON · All rights reserved
-        </Text>
+    <View style={styles.outerContainer}>
+      {/* Explicit back button — always visible on web & native */}
+      <View style={[styles.backBar, { paddingTop: Platform.OS === 'web' ? 12 : insets.top + 4 }]}>
+        <Pressable
+          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
+          onPress={() => nav.goBack()}
+        >
+          <Text style={styles.backBtnText}>← Back</Text>
+        </Pressable>
+        <Text style={styles.backBarTitle}>Help & Docs</Text>
+        <View style={styles.backBtnSpacer} />
       </View>
-    </ScrollView>
+
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <LinearGradient
+          colors={['#000000', '#1a1a1a']}
+          style={styles.hero}
+        >
+          <Text style={styles.heroIcon}>📖</Text>
+          <Text style={styles.heroTitle}>Help & Documentation</Text>
+          <Text style={styles.heroSub}>CareNearby platform guide · Fonctionnalités vérifiées</Text>
+          <View style={styles.versionBadge}>
+            <Text style={styles.versionText}>v1.0.0 · Greater Sudbury, ON</Text>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.body}>
+          {sections.map(section => (
+            <View key={section.key} style={styles.card}>
+              <Pressable
+                style={({ pressed }) => [styles.cardHeader, pressed && { opacity: 0.85 }]}
+                onPress={() => toggle(section.key)}
+              >
+                <Text style={styles.cardIcon}>{section.icon}</Text>
+                <Text style={styles.cardTitle}>{section.title}</Text>
+                <Text style={styles.cardChevron}>{expanded === section.key ? '▲' : '▼'}</Text>
+              </Pressable>
+              {expanded === section.key && section.content}
+            </View>
+          ))}
+
+          <Text style={styles.footer}>
+            © {new Date().getFullYear()} CareNearby · Professional PSW Services{'\n'}
+            Greater Sudbury, ON · All rights reserved
+          </Text>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  outerContainer: { flex: 1, backgroundColor: '#000' },
+
+  backBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingBottom: 10,
+    backgroundColor: '#000',
+  },
+  backBtn: { paddingVertical: 6, paddingHorizontal: 4, minWidth: 70 },
+  backBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  backBarTitle: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  backBtnSpacer: { minWidth: 70 },
+
   container: { flex: 1, backgroundColor: '#f5f5f5' },
 
-  hero: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 28 },
+  hero: { alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 28 },
   heroIcon: { fontSize: 40, marginBottom: 12 },
   heroTitle: { color: '#fff', fontSize: 24, fontWeight: '800', marginBottom: 6, textAlign: 'center' },
   heroSub: { color: 'rgba(255,255,255,0.6)', fontSize: 13, textAlign: 'center', marginBottom: 14 },

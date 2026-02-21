@@ -97,8 +97,8 @@ export function CustomerNavigator() {
       }}
     >
       <Stack.Screen name="Home" component={HomeTabs} options={{ headerShown: false }} />
-      <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ title: 'Booking Details' }} />
-      <Stack.Screen name="Help" component={HelpScreen} options={{ title: 'Help & Documentation' }} />
+      <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Help" component={HelpScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }

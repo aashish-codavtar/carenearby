@@ -111,8 +111,8 @@ export function PSWNavigator() {
     >
       <Stack.Screen name="PSWHome" component={PSWTabs} options={{ headerShown: false }} />
       <Stack.Screen name="PSWOnboarding" component={PSWOnboardingScreen} options={{ headerShown: false, gestureEnabled: false }} />
-      <Stack.Screen name="JobDetail" component={JobDetailScreen} options={{ title: 'Job Details' }} />
-      <Stack.Screen name="Help" component={HelpScreen} options={{ title: 'Help & Documentation' }} />
+      <Stack.Screen name="JobDetail" component={JobDetailScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Help" component={HelpScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }

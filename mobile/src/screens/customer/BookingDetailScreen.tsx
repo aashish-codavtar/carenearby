@@ -3,6 +3,7 @@ import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from '
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+
 import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
 import { apiCancelBooking, apiRateBooking, Booking } from '../../api/client';
@@ -84,6 +85,14 @@ export function BookingDetailScreen() {
       contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
       showsVerticalScrollIndicator={false}
     >
+      {/* Explicit back button — works on web where native header may not */}
+      <Pressable
+        style={({ pressed }) => [styles.backButton, { marginTop: insets.top + 8 }, pressed && { opacity: 0.6 }]}
+        onPress={() => nav.goBack()}
+      >
+        <Text style={styles.backButtonText}>← Bookings</Text>
+      </Pressable>
+
       {/* Hero */}
       <LinearGradient
         colors={[statusColor + 'CC', statusColor + '44', Colors.systemGroupedBackground]}
@@ -263,6 +272,8 @@ export function BookingDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.systemGroupedBackground },
+  backButton: { marginHorizontal: 16, marginBottom: 4, flexDirection: 'row', alignItems: 'center' },
+  backButtonText: { fontSize: 16, fontWeight: '600', color: Colors.systemBlue },
   hero: { padding: 24, paddingBottom: 32 },
   heroContent: { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
   heroIcon: { fontSize: 48, marginTop: 4 },
