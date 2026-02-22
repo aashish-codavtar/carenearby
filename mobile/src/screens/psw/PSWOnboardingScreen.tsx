@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,11 +17,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 import { apiSubmitPSWOnboarding } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
-import { IOSButton } from '../../components/IOSButton';
 import { Colors } from '../../utils/colors';
-import { Storage } from '../../utils/storage';
+import { Storage, StoredDocument } from '../../utils/storage';
 
 // ── Qualification types ────────────────────────────────────────────────────────
 const QUAL_TYPES = [
@@ -46,16 +48,23 @@ const SPECIALTY_OPTIONS = [
 // ── Language options ───────────────────────────────────────────────────────────
 const LANGUAGE_OPTIONS = ['English', 'French', 'Spanish', 'Mandarin', 'Punjabi', 'Arabic'];
 
+const STEP4_DOCS = [
+  { id: 'police_check',    label: 'Police Check',         icon: '🛡️', required: true },
+  { id: 'psw_certificate', label: 'PSW Certificate',      icon: '🏅', required: true },
+  { id: 'first_aid',       label: 'First Aid Certificate', icon: '🚑', required: false },
+  { id: 'id_card',         label: 'Government ID',        icon: '🪪', required: false },
+];
+
 // ── Step indicator (top-level so it never causes re-mount) ────────────────────
 function StepIndicator({ step }: { step: number }) {
   return (
     <View style={styles.stepRow}>
-      {[1, 2, 3].map(s => (
+      {[1, 2, 3, 4].map(s => (
         <View key={s} style={styles.stepWrap}>
           <View style={[styles.stepDot, step >= s && styles.stepDotActive]}>
             <Text style={[styles.stepNum, step >= s && styles.stepNumActive]}>{s}</Text>
           </View>
-          {s < 3 && <View style={[styles.stepLine, step > s && styles.stepLineActive]} />}
+          {s < 4 && <View style={[styles.stepLine, step > s && styles.stepLineActive]} />}
         </View>
       ))}
     </View>
@@ -68,7 +77,9 @@ export function PSWOnboardingScreen() {
   const { user } = useAuth();
 
   // Step state
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [uploadedDocs, setUploadedDocs] = useState<StoredDocument[]>([]);
+  const [uploading, setUploading] = useState<string | null>(null);
 
   // Step 1 – Qualification
   const [qualType, setQualType]     = useState<QualType>('PSW');
@@ -98,7 +109,7 @@ export function PSWOnboardingScreen() {
     setLanguages(prev => prev.includes(l) ? prev.filter(x => x !== l) : [...prev, l]);
   }
 
-  async function submit() {
+  async function submitProfile() {
     setLoading(true);
     try {
       await apiSubmitPSWOnboarding({
@@ -114,23 +125,67 @@ export function PSWOnboardingScreen() {
         ownTransportation: ownCar,
       });
       if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (user) {
-        const updatedUser = { ...user, onboardingComplete: true };
-        const token = await Storage.getToken();
-        if (token) await Storage.saveAuth(token, updatedUser);
-      }
-      nav.reset({ index: 0, routes: [{ name: 'PSWHome' as never }] });
+      // Move to Step 4 (document upload)
+      setStep(4);
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Could not save your credentials. Please try again.');
     }
     setLoading(false);
   }
 
+  async function uploadDocForOnboarding(docType: typeof STEP4_DOCS[0]) {
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setUploading(docType.id);
+    try {
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Required', 'Allow photo access to upload documents.');
+          setUploading(null); return;
+        }
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: false, quality: 0.92,
+      });
+      if (!result.canceled && result.assets[0]) {
+        const doc: StoredDocument = { id: docType.id, label: docType.label, uri: result.assets[0].uri, uploadedAt: new Date().toISOString() };
+        await Storage.saveDocument(doc);
+        setUploadedDocs(await Storage.getDocuments());
+      }
+    } catch {}
+    setUploading(null);
+  }
+
+  async function finishOnboarding() {
+    if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (user) {
+      const updatedUser = { ...user, onboardingComplete: true };
+      const token = await Storage.getToken();
+      if (token) await Storage.saveAuth(token, updatedUser);
+    }
+    nav.reset({ index: 0, routes: [{ name: 'PSWHome' as never }] });
+  }
+
+  // ── Sticky footer configuration ─────────────────────────────────────────────
+  const footerLabel = step === 1 ? 'Continue' : step === 2 ? 'Continue' : step === 3 ? 'Submit Profile' : 'Go to Dashboard →';
+  const footerColors: [string, string] = step >= 3 ? ['#065F46', '#10B981'] : ['#0A1628', '#1565C0'];
+  function handleFooterNext() {
+    if (step === 1) setStep(2);
+    else if (step === 2) setStep(3);
+    else if (step === 3) submitProfile();
+    else finishOnboarding();
+  }
+  function handleFooterBack() {
+    if (step === 2) setStep(1);
+    else if (step === 3) setStep(2);
+  }
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={{ flex: 1 }}>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+        contentContainerStyle={{ paddingBottom: 20 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -141,7 +196,7 @@ export function PSWOnboardingScreen() {
         >
           <Text style={styles.headerIcon}>🧑‍⚕️</Text>
           <Text style={styles.headerTitle}>PSW Verification</Text>
-          <Text style={styles.headerSub}>Step {step} of 3 — Let's verify your credentials</Text>
+          <Text style={styles.headerSub}>Step {step} of 4 — {step < 4 ? "Let's verify your credentials" : 'Upload your documents'}</Text>
           <StepIndicator step={step} />
         </LinearGradient>
 
@@ -208,13 +263,6 @@ export function PSWOnboardingScreen() {
                 returnKeyType="done"
               />
 
-              <View style={styles.navRow}>
-                <IOSButton
-                  title="Continue →"
-                  onPress={() => setStep(2)}
-                  style={{ flex: 1 }}
-                />
-              </View>
             </>
           )}
 
@@ -270,12 +318,6 @@ export function PSWOnboardingScreen() {
               />
               <Text style={styles.charCount}>{bio.length}/400</Text>
 
-              <View style={styles.navRow}>
-                <Pressable style={styles.backBtn} onPress={() => setStep(1)}>
-                  <Text style={styles.backBtnText}>← Back</Text>
-                </Pressable>
-                <IOSButton title="Continue →" onPress={() => setStep(3)} style={{ flex: 1 }} />
-              </View>
             </>
           )}
 
@@ -323,23 +365,96 @@ export function PSWOnboardingScreen() {
                 </View>
               </View>
 
-              <View style={styles.navRow}>
-                <Pressable style={styles.backBtn} onPress={() => setStep(2)}>
-                  <Text style={styles.backBtnText}>← Back</Text>
-                </Pressable>
-                <IOSButton
-                  title="Submit & Go to Dashboard"
-                  variant="success"
-                  loading={loading}
-                  onPress={submit}
-                  style={{ flex: 1 }}
-                />
+            </>
+          )}
+
+          {/* ── STEP 4: Document Upload ── */}
+          {step === 4 && (
+            <>
+              <Text style={styles.stepTitle}>Upload Your Documents</Text>
+              <Text style={styles.stepSub}>
+                Upload photos of your credentials so our team can verify you. Required documents are marked ✱. You can also add more later from your Profile.
+              </Text>
+
+              {STEP4_DOCS.map(docType => {
+                const uploaded = uploadedDocs.find(d => d.id === docType.id);
+                const isLoading = uploading === docType.id;
+                return (
+                  <View key={docType.id} style={[styles.docCard, uploaded && styles.docCardUploaded]}>
+                    <View style={styles.docCardHeader}>
+                      <View style={[styles.docIconBubble, { backgroundColor: uploaded ? '#ECFDF5' : '#F9FAFB' }]}>
+                        <Text style={styles.docCardIcon}>{docType.icon}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={styles.docCardLabel}>{docType.label}</Text>
+                          {docType.required && (
+                            <View style={styles.requiredBadge}>
+                              <Text style={styles.requiredBadgeText}>Required</Text>
+                            </View>
+                          )}
+                        </View>
+                        {uploaded ? (
+                          <Text style={styles.docCardDate}>✅ Uploaded</Text>
+                        ) : (
+                          <Text style={styles.docCardMissing}>{docType.required ? 'Required — please upload' : 'Optional'}</Text>
+                        )}
+                      </View>
+                    </View>
+                    {uploaded && (
+                      <Image source={{ uri: uploaded.uri }} style={styles.docPreview} resizeMode="cover" />
+                    )}
+                    <Pressable
+                      style={[styles.docUploadBtn, uploaded ? styles.docUploadBtnReplace : styles.docUploadBtnNew, isLoading && { opacity: 0.6 }]}
+                      onPress={() => uploadDocForOnboarding(docType)}
+                      disabled={isLoading}
+                    >
+                      <Text style={[styles.docUploadText, uploaded ? styles.docUploadTextReplace : styles.docUploadTextNew]}>
+                        {isLoading ? 'Selecting…' : uploaded ? '↑ Replace' : '↑ Upload Photo'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
+
+              <View style={styles.pendingNotice}>
+                <Text style={styles.pendingIcon}>⏳</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.pendingTitle}>Pending Admin Review</Text>
+                  <Text style={styles.pendingDesc}>
+                    Your profile and documents will be reviewed within 1–2 business days. You can browse jobs while we verify your credentials.
+                  </Text>
+                </View>
               </View>
+
             </>
           )}
 
         </View>
       </ScrollView>
+
+      {/* ── Sticky bottom navigation ──────────────────────────────── */}
+      <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + 12 }]}>
+        {step > 1 && step < 4 && (
+          <Pressable style={styles.footerBackBtn} onPress={handleFooterBack}>
+            <Text style={styles.footerBackText}>← Back</Text>
+          </Pressable>
+        )}
+        <Pressable
+          style={[styles.footerNextBtn, loading && { opacity: 0.7 }]}
+          onPress={handleFooterNext}
+          disabled={loading}
+        >
+          <LinearGradient colors={footerColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.footerNextGrad}>
+            {loading
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.footerNextText}>{footerLabel}</Text>
+            }
+          </LinearGradient>
+        </Pressable>
+      </View>
+
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -436,12 +551,45 @@ const styles = StyleSheet.create({
   pendingTitle: { fontSize: 14, fontWeight: '700', color: Colors.systemOrange, marginBottom: 4 },
   pendingDesc: { fontSize: 13, color: Colors.secondaryLabel, lineHeight: 19 },
 
-  // Nav row
-  navRow: { flexDirection: 'row', gap: 12, marginTop: 24 },
-  backBtn: {
-    width: 80, height: 56, justifyContent: 'center', alignItems: 'center',
+  // Sticky footer
+  stickyFooter: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 20, paddingTop: 14,
+    backgroundColor: Colors.systemBackground,
+    borderTopWidth: 1, borderTopColor: Colors.separator,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 8,
+  },
+  footerBackBtn: {
+    width: 72, height: 56, justifyContent: 'center', alignItems: 'center',
     borderRadius: 16, borderWidth: 1.5, borderColor: Colors.systemGray4,
     backgroundColor: Colors.systemBackground,
   },
-  backBtnText: { fontSize: 15, fontWeight: '600', color: Colors.secondaryLabel },
+  footerBackText: { fontSize: 15, fontWeight: '600', color: Colors.secondaryLabel },
+  footerNextBtn: { flex: 1, height: 56, borderRadius: 16, overflow: 'hidden' },
+  footerNextGrad: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  footerNextText: { color: '#fff', fontSize: 17, fontWeight: '700', letterSpacing: -0.3 },
+
+  // Step 4 document upload cards
+  docCard: {
+    backgroundColor: Colors.systemBackground, borderRadius: 18, padding: 16, marginBottom: 12,
+    borderWidth: 1.5, borderColor: '#E5E7EB',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+    gap: 12,
+  },
+  docCardUploaded: { borderColor: '#A7F3D0' },
+  docCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  docIconBubble: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E5E7EB', flexShrink: 0 },
+  docCardIcon: { fontSize: 24 },
+  docCardLabel: { fontSize: 16, fontWeight: '700', color: Colors.label, marginBottom: 3 },
+  docCardDate: { fontSize: 13, color: '#059669', fontWeight: '600' },
+  docCardMissing: { fontSize: 13, color: Colors.tertiaryLabel },
+  requiredBadge: { backgroundColor: '#FEF3C7', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: '#FCD34D' },
+  requiredBadgeText: { fontSize: 11, fontWeight: '700', color: '#92400E' },
+  docPreview: { width: '100%', height: 120, borderRadius: 12, backgroundColor: '#F3F4F6' },
+  docUploadBtn: { paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  docUploadBtnNew: { backgroundColor: Colors.heroNavy },
+  docUploadBtnReplace: { backgroundColor: '#F0FDF4', borderWidth: 1.5, borderColor: '#86EFAC' },
+  docUploadText: { fontSize: 15, fontWeight: '700' },
+  docUploadTextNew: { color: '#fff' },
+  docUploadTextReplace: { color: '#059669' },
 });

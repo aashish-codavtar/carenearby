@@ -6,6 +6,7 @@ import {
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -178,6 +179,14 @@ type ViewMode = 'list' | 'map';
 
 const SUDBURY_CENTER = { latitude: 46.4917, longitude: -80.9930 };
 
+function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 export function NearbyJobsScreen() {
   const nav = useNavigation<any>();
   const insets = useSafeAreaInsets();
@@ -187,6 +196,7 @@ export function NearbyJobsScreen() {
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('checking');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [searchText, setSearchText] = useState('');
+  const [serviceFilter, setServiceFilter] = useState<string | null>(null);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const coordsRef = useRef<{ lat: number; lng: number } | undefined>(undefined);
 
@@ -250,9 +260,21 @@ export function NearbyJobsScreen() {
     }
   }
 
-  const filteredJobs = searchText.trim()
-    ? jobs.filter(j => j.serviceType.toLowerCase().includes(searchText.toLowerCase()))
-    : jobs;
+  // Enrich jobs with distance from current PSW location
+  const jobsWithDistance = jobs.map(j => {
+    const [lng, lat] = j.location?.coordinates ?? [0, 0];
+    if (!lat || !lng || !coordsRef.current) return { ...j, distanceKm: undefined as number | undefined };
+    return { ...j, distanceKm: Math.round(getDistanceKm(coordsRef.current.lat, coordsRef.current.lng, lat, lng) * 10) / 10 };
+  });
+
+  // Unique service types for filter chips
+  const serviceTypes = Array.from(new Set(jobs.map(j => j.serviceType))).slice(0, 6);
+
+  const filteredJobs = jobsWithDistance.filter(j => {
+    const matchSearch = !searchText.trim() || j.serviceType.toLowerCase().includes(searchText.toLowerCase());
+    const matchChip = !serviceFilter || j.serviceType === serviceFilter;
+    return matchSearch && matchChip;
+  });
 
   const totalEarnings = filteredJobs.reduce((s, j) => s + j.totalPrice, 0);
   const mapCenter = coordsRef.current ?? { lat: SUDBURY_CENTER.latitude, lng: SUDBURY_CENTER.longitude };
@@ -301,6 +323,29 @@ export function NearbyJobsScreen() {
             </Pressable>
           )}
         </View>
+
+        {/* Service type filter chips */}
+        {serviceTypes.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }} contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
+            <Pressable
+              style={[styles.filterChip, !serviceFilter && styles.filterChipActive]}
+              onPress={() => setServiceFilter(null)}
+            >
+              <Text style={[styles.filterChipText, !serviceFilter && styles.filterChipTextActive]}>All</Text>
+            </Pressable>
+            {serviceTypes.map(st => (
+              <Pressable
+                key={st}
+                style={[styles.filterChip, serviceFilter === st && styles.filterChipActive]}
+                onPress={() => setServiceFilter(prev => prev === st ? null : st)}
+              >
+                <Text style={[styles.filterChipText, serviceFilter === st && styles.filterChipTextActive]}>
+                  {ServiceIcons[st] ?? '🏥'} {st}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
 
         {/* Earnings preview */}
         {filteredJobs.length > 0 && (
@@ -450,6 +495,17 @@ const styles = StyleSheet.create({
   viewToggleText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   locationBadge: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8 },
   locationBadgeText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+
+  // Filter chips
+  filterChip: {
+    paddingHorizontal: 14, paddingVertical: 7,
+    borderRadius: 20, borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  filterChipActive: { backgroundColor: '#fff', borderColor: '#fff' },
+  filterChipText: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '700' },
+  filterChipTextActive: { color: Colors.heroNavy },
 
   // Search bar
   searchBar: {

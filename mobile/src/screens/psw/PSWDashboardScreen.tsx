@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Image,
   Platform,
   Pressable,
   RefreshControl,
@@ -16,6 +17,7 @@ import * as Haptics from 'expo-haptics';
 import { apiGetProfile, apiMyJobs, apiToggleAvailability, Booking, UserProfile } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import { Colors, ServiceIcons } from '../../utils/colors';
+import { Storage } from '../../utils/storage';
 import { JobCard } from '../../components/JobCard';
 import { StatusBadge } from '../../components/StatusBadge';
 
@@ -80,6 +82,7 @@ export function PSWDashboardScreen() {
   const nav = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const [lang, setLang] = useState<Lang>('en');
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [jobs, setJobs] = useState<Booking[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isOnline, setIsOnline] = useState(false);
@@ -119,7 +122,7 @@ export function PSWDashboardScreen() {
     setRefreshing(false);
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => { load(); Storage.getPhotoUri().then(setPhotoUri); }, [load]));
 
   useEffect(() => {
     if (isOnline) {
@@ -187,7 +190,10 @@ export function PSWDashboardScreen() {
               <Text style={styles.langToggleText}>{lang === 'en' ? 'FR' : 'EN'}</Text>
             </Pressable>
             <Pressable style={styles.avatarBtn} onPress={() => nav.navigate('PSWProfile')}>
-              <Text style={styles.avatarBtnText}>{user?.name?.[0]?.toUpperCase() ?? '?'}</Text>
+              {photoUri
+                ? <Image source={{ uri: photoUri }} style={styles.avatarImg} />
+                : <Text style={styles.avatarBtnText}>{user?.name?.[0]?.toUpperCase() ?? '?'}</Text>
+              }
             </Pressable>
           </View>
         </View>
@@ -341,6 +347,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   avatarBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  avatarImg: { width: 38, height: 38, borderRadius: 19 },
   heroGreeting: { color: '#fff', fontSize: 28, fontWeight: '900', marginBottom: 4, letterSpacing: -0.5 },
   heroSub: { color: 'rgba(255,255,255,0.72)', fontSize: 14, marginBottom: 28 },
 

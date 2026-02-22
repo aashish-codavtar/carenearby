@@ -4,22 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-function CheckRow({
-  icon, label, desc, status = 'ok',
-}: { icon: string; label: string; desc?: string; status?: 'ok' | 'pending' | 'info' }) {
-  const badge = status === 'ok' ? '✅' : status === 'pending' ? '⏳' : 'ℹ️';
-  return (
-    <View style={styles.checkRow}>
-      <Text style={styles.checkIcon}>{icon}</Text>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.checkLabel}>{label}</Text>
-        {desc ? <Text style={styles.checkDesc}>{desc}</Text> : null}
-      </View>
-      <Text style={styles.checkBadge}>{badge}</Text>
-    </View>
-  );
-}
-
 function StepRow({ step, title, desc }: { step: number; title: string; desc: string }) {
   return (
     <View style={styles.stepRow}>
@@ -34,151 +18,130 @@ function StepRow({ step, title, desc }: { step: number; title: string; desc: str
   );
 }
 
-type SectionKey = 'platform' | 'booking' | 'psw' | 'services' | 'pricing' | 'coverage' | 'safety' | 'contact';
+function InfoRow({ icon, label, desc }: { icon: string; label: string; desc: string }) {
+  return (
+    <View style={styles.infoRow}>
+      <Text style={styles.infoIcon}>{icon}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.infoLabel}>{label}</Text>
+        <Text style={styles.infoDesc}>{desc}</Text>
+      </View>
+    </View>
+  );
+}
+
+type SectionKey = 'register' | 'qualifications' | 'documents' | 'earnings' | 'coverage' | 'safety' | 'contact';
 
 export function HelpScreen() {
   const insets = useSafeAreaInsets();
   const nav    = useNavigation<any>();
-  const [expanded, setExpanded] = useState<SectionKey | null>('booking');
+  const [expanded, setExpanded] = useState<SectionKey | null>('register');
 
   const toggle = (key: SectionKey) => setExpanded(prev => prev === key ? null : key);
 
   const sections: { key: SectionKey; icon: string; title: string; content: React.ReactNode }[] = [
     {
-      key: 'platform',
-      icon: '🖥️',
-      title: 'Platform Status',
+      key: 'register',
+      icon: '📝',
+      title: 'How to Register as a Healthcare Pro',
       content: (
         <View style={styles.sectionBody}>
-          <CheckRow icon="📱" label="Progressive Web App (PWA)" desc="Install on iOS, Android & Desktop from browser" />
-          <CheckRow icon="⚡" label="Service Worker & Offline Cache" desc="App shell cached for fast loading" />
-          <CheckRow icon="🌐" label="Bilingual Support" desc="English & French — toggle on Home screen" />
-          <CheckRow icon="🔒" label="HTTPS + JWT Auth" desc="All traffic encrypted, token-based sessions" />
-          <CheckRow icon="📱" label="OTP Verification" desc="Phone number verified via Twilio SMS" />
-          <CheckRow icon="🗄️" label="MongoDB Database" desc="Persistent data with WiredTiger engine" />
-          <CheckRow icon="🚀" label="Vercel (PWA)" desc="Auto-deploys from GitHub main branch" />
-          <CheckRow icon="🚂" label="Railway (Backend)" desc="Node.js/Express API, always on" />
-          <CheckRow icon="📍" label="OpenStreetMap + Leaflet" desc="Real maps with PSW job pins on web" />
-          <CheckRow icon="🗺️" label="react-native-maps" desc="Native map view on iOS & Android" />
+          <StepRow step={1} title="Download the App" desc="Open CareNearby in your browser and tap 'Add to Home Screen' to install the PWA" />
+          <StepRow step={2} title="Create Your Account" desc="Enter your name, phone number, and select 'PSW Professional' role" />
+          <StepRow step={3} title="Verify Your Phone" desc="Enter the 6-digit OTP code sent via SMS to confirm your identity" />
+          <StepRow step={4} title="Choose Your Qualification" desc="Select PSW, RPN, RN, OT, PT, DSW, HCA, or Other — then enter your college & registration number" />
+          <StepRow step={5} title="Select Specialties & Languages" desc="Choose your care specialties (dementia, post-surgery, etc.) and languages you speak" />
+          <StepRow step={6} title="Confirm Your Extras" desc="First Aid / CPR certificate, driver's licence, and own transportation" />
+          <StepRow step={7} title="Upload Documents" desc="Police check, PSW certificate, First Aid cert, and Government ID" />
+          <StepRow step={8} title="Wait for Approval" desc="Our team reviews your profile within 1–2 business days and approves you to accept clients" />
+          <StepRow step={9} title="Start Accepting Jobs" desc="Go online in the Dashboard and accept nearby client bookings to start earning" />
         </View>
       ),
     },
     {
-      key: 'booking',
-      icon: '📋',
-      title: 'How Booking Works',
+      key: 'qualifications',
+      icon: '🏅',
+      title: 'Qualification Types We Accept',
       content: (
         <View style={styles.sectionBody}>
-          <StepRow step={1} title="Choose Your Service" desc="Select from 7 personal care service types" />
-          <StepRow step={2} title="Pick a Date" desc="Tap to advance to your preferred date" />
-          <StepRow step={3} title="Set Start Time" desc="Choose from preset time slots (7 am – 5 pm)" />
-          <StepRow step={4} title="Set Duration" desc="Minimum 3 hours, up to 12 hours" />
-          <StepRow step={5} title="Add Instructions" desc="Optional notes for the PSW (mobility, meds, etc.)" />
-          <StepRow step={6} title="Review & Confirm" desc="Price estimate shown — submit request" />
-          <StepRow step={7} title="PSW Accepts" desc="Nearest verified PSW accepts the job" />
-          <StepRow step={8} title="Care Session" desc="PSW arrives and marks job as Started" />
-          <StepRow step={9} title="Rate Your PSW" desc="Leave a 1–5 star review after completion" />
+          <InfoRow icon="🧑‍⚕️" label="PSW — Personal Support Worker" desc="Ontario college-trained support workers providing personal care at home" />
+          <InfoRow icon="💉" label="RPN — Registered Practical Nurse" desc="Licensed practical nurses with full medication and wound care authority" />
+          <InfoRow icon="🩺" label="RN — Registered Nurse" desc="Full registered nurses for complex care needs and medical oversight" />
+          <InfoRow icon="🙌" label="OT — Occupational Therapist" desc="Specialists in mobility, adaptive equipment, and daily living activities" />
+          <InfoRow icon="🏃" label="PT — Physiotherapist" desc="Rehabilitation and physical therapy for injury recovery and mobility" />
+          <InfoRow icon="❤️" label="DSW — Developmental Services Worker" desc="Specialists supporting individuals with intellectual disabilities" />
+          <InfoRow icon="🏠" label="HCA — Home Care Aide" desc="Trained home care assistants for personal support and companionship" />
+          <InfoRow icon="⚕️" label="Other Healthcare Role" desc="Any other verified healthcare professional — submit your credentials for review" />
         </View>
       ),
     },
     {
-      key: 'psw',
-      icon: '🧑‍⚕️',
-      title: 'PSW Verification Process',
+      key: 'documents',
+      icon: '📄',
+      title: 'Required Verification Documents',
       content: (
         <View style={styles.sectionBody}>
-          <CheckRow icon="📞" label="Phone Registration" desc="OTP verified phone number at sign-up" />
-          <CheckRow icon="📝" label="Credential Type" desc="PSW, RPN, RN, OT, PT, DSW, HCA, or Other" />
-          <CheckRow icon="🏫" label="College Registration Number" desc="License number & issuing institution" />
-          <CheckRow icon="🚑" label="First Aid & CPR Certificate" desc="Valid certification required" />
-          <CheckRow icon="🚗" label="Driver's Licence" desc="Ontario G or G2 checked" />
-          <CheckRow icon="🏠" label="Own Transportation" desc="Vehicle availability for client travel" />
-          <CheckRow icon="👤" label="Identity Verification" desc="Government-issued ID confirmed by admin" />
-          <CheckRow icon="🛡️" label="Police Clearance" desc="Criminal record background check" />
-          <CheckRow icon="👮" label="Admin Review" desc="Manual review by CareNearby team (1–2 business days)" />
-          <CheckRow icon="✅" label="Approved & Active" desc="PSW appears to customers and can accept jobs" />
-        </View>
-      ),
-    },
-    {
-      key: 'services',
-      icon: '💼',
-      title: 'Services Offered',
-      content: (
-        <View style={styles.sectionBody}>
-          {([
-            ['🧴', 'Personal Care', 'Bathing, grooming, hygiene, and dressing assistance'],
-            ['🤝', 'Companionship', 'Social visits, activities, and emotional support'],
-            ['🍽️', 'Meal Preparation', 'Cooking, diet planning, and feeding assistance'],
-            ['💊', 'Medication Reminders', 'Scheduled reminders and administration support'],
-            ['🧹', 'Light Housekeeping', 'Cleaning, laundry, and tidying living spaces'],
-            ['♿', 'Mobility Assistance', 'Transfers, walking support, and exercise help'],
-            ['🏥', 'Post-Surgery Support', 'Recovery monitoring, wound care, follow-up help'],
-          ] as [string, string, string][]).map(([icon, name, desc]) => (
-            <CheckRow key={name} icon={icon} label={name} desc={desc} status="info" />
-          ))}
-        </View>
-      ),
-    },
-    {
-      key: 'pricing',
-      icon: '💳',
-      title: 'Pricing & Payments',
-      content: (
-        <View style={styles.sectionBody}>
-          <View style={styles.priceHighlight}>
-            <Text style={styles.priceAmount}>$25</Text>
-            <Text style={styles.priceUnit}>/hr</Text>
+          <View style={styles.requiredNote}>
+            <Text style={styles.requiredNoteText}>✱ Required documents must be uploaded before your profile can be approved</Text>
           </View>
-          {([
-            ['⏱️', '3-hour minimum', 'Minimum $75 per session'],
-            ['⬆️', 'Up to 12 hours', 'Maximum $300 per session'],
-            ['💵', 'Private Pay', 'Not covered by OHIP or provincial insurance'],
-            ['💸', 'Cash or e-Transfer', 'Paid directly to PSW at time of service'],
-            ['🧾', 'Price shown upfront', 'No hidden fees or platform surcharges'],
-          ] as [string, string, string][]).map(([icon, label, desc]) => (
-            <CheckRow key={label} icon={icon} label={label} desc={desc} status="info" />
-          ))}
+          <InfoRow icon="🛡️" label="Police Check Clearance ✱" desc="RCMP or OPP criminal record check — must be recent (within 2 years)" />
+          <InfoRow icon="🏅" label="PSW / Healthcare Certificate ✱" desc="Official credential from your accredited college or university" />
+          <InfoRow icon="🚑" label="First Aid / CPR Certificate ✱" desc="Valid St. John Ambulance or Canadian Red Cross certification" />
+          <InfoRow icon="🚗" label="Driver's Licence (optional)" desc="Ontario G or G2 licence — both sides of the card" />
+          <InfoRow icon="🪪" label="Government-Issued ID (optional)" desc="Passport, Ontario Photo Card, or provincial health card" />
+          <InfoRow icon="📋" label="Liability Insurance (optional)" desc="Professional liability or errors & omissions policy if applicable" />
+        </View>
+      ),
+    },
+    {
+      key: 'earnings',
+      icon: '💰',
+      title: 'Earnings & How You Get Paid',
+      content: (
+        <View style={styles.sectionBody}>
+          <View style={styles.rateCard}>
+            <Text style={styles.rateAmount}>$25</Text>
+            <Text style={styles.rateUnit}>/hr</Text>
+          </View>
+          <InfoRow icon="⏱️" label="3-hour minimum per booking" desc="Minimum guaranteed earnings of $75 per job" />
+          <InfoRow icon="⬆️" label="Up to 12 hours per booking" desc="Maximum $300 per single session" />
+          <InfoRow icon="💵" label="Private-pay direct to you" desc="Clients pay you directly — cash or e-Transfer at time of service" />
+          <InfoRow icon="🧾" label="Price shown upfront to client" desc="No hidden platform fees or commissions deducted from your pay" />
+          <InfoRow icon="📍" label="Jobs within 15 km of Sudbury" desc="Accept jobs near you — no long-distance travel required" />
         </View>
       ),
     },
     {
       key: 'coverage',
       icon: '📍',
-      title: 'Coverage Area',
+      title: 'Service Area — Greater Sudbury',
       content: (
         <View style={styles.sectionBody}>
           <View style={styles.coverageCard}>
             <Text style={styles.coverageTitle}>📍 Greater Sudbury, ON</Text>
             <Text style={styles.coverageSub}>15 km radius · ~706 km² service area</Text>
           </View>
-          {([
-            ['🏙️', 'Downtown Sudbury', 'Primary coverage zone'],
-            ['🏘️', 'South End & New Sudbury', 'High-density residential areas'],
-            ['🌿', 'Val-Caron & Hanmer', 'Northeast communities'],
-            ['🏔️', 'Capreol', 'Northern coverage boundary'],
-            ['🌲', 'Lively & Walden', 'Southwest communities'],
-            ['🏡', 'Sudbury East / Azilda', 'Rural east & west coverage'],
-          ] as [string, string, string][]).map(([icon, label, desc]) => (
-            <CheckRow key={label} icon={icon} label={label} desc={desc} status="info" />
-          ))}
+          <InfoRow icon="🏙️" label="Downtown Sudbury" desc="Primary coverage zone — highest job volume" />
+          <InfoRow icon="🏘️" label="South End & New Sudbury" desc="High-density residential areas" />
+          <InfoRow icon="🌿" label="Val-Caron & Hanmer" desc="Northeast communities" />
+          <InfoRow icon="🏔️" label="Capreol" desc="Northern coverage boundary" />
+          <InfoRow icon="🌲" label="Lively & Walden" desc="Southwest communities" />
+          <InfoRow icon="🏡" label="Azilda & Sudbury East" desc="Rural east & west coverage" />
         </View>
       ),
     },
     {
       key: 'safety',
       icon: '🛡️',
-      title: 'Trust & Safety Features',
+      title: 'Trust & Safety',
       content: (
         <View style={styles.sectionBody}>
-          <CheckRow icon="🛡️" label="Police Clearance Required" desc="Criminal record check for every PSW" />
-          <CheckRow icon="✅" label="Government ID Verified" desc="Photo ID confirmed before approval" />
-          <CheckRow icon="👮" label="Admin Manual Review" desc="Humans review every PSW before going live" />
-          <CheckRow icon="⭐" label="Rating & Review System" desc="1–5 star reviews after every completed booking" />
-          <CheckRow icon="🚫" label="PSW Rejection & Suspension" desc="Admin can suspend any PSW account" />
-          <CheckRow icon="❌" label="Booking Cancellation" desc="Customers can cancel REQUESTED bookings" />
-          <CheckRow icon="📍" label="Location Verification" desc="PSW must be within 15 km of Sudbury" />
-          <CheckRow icon="🔔" label="Live Status Updates" desc="Requested → Accepted → Started → Completed" />
+          <InfoRow icon="🛡️" label="Police Clearance Required" desc="Criminal record background check for every healthcare worker" />
+          <InfoRow icon="✅" label="Government ID Verified" desc="Photo ID confirmed by our admin team before account approval" />
+          <InfoRow icon="👮" label="Manual Admin Review" desc="A real person reviews every PSW profile before they go live" />
+          <InfoRow icon="⭐" label="Rating & Review System" desc="Clients leave 1–5 star reviews after every completed booking" />
+          <InfoRow icon="🚫" label="Suspension Controls" desc="Admin can suspend any account immediately if needed" />
+          <InfoRow icon="🔔" label="Live Job Status" desc="Requested → Accepted → Started → Completed — always tracked" />
         </View>
       ),
     },
@@ -194,19 +157,11 @@ export function HelpScreen() {
           >
             <Text style={styles.contactIcon}>✉️</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.contactLabel}>Email Support</Text>
+              <Text style={styles.contactLabel}>Email Us</Text>
               <Text style={styles.contactValue}>support@carenearby.ca</Text>
             </View>
             <Text style={styles.contactArrow}>→</Text>
           </Pressable>
-          <View style={styles.divider} />
-          <View style={styles.contactRow}>
-            <Text style={styles.contactIcon}>📍</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.contactLabel}>Service Area</Text>
-              <Text style={styles.contactValueDark}>Greater Sudbury, ON 🇨🇦</Text>
-            </View>
-          </View>
           <View style={styles.divider} />
           <View style={styles.contactRow}>
             <Text style={styles.contactIcon}>⏰</Text>
@@ -223,6 +178,14 @@ export function HelpScreen() {
               <Text style={styles.contactValueDark}>English · Français</Text>
             </View>
           </View>
+          <View style={styles.divider} />
+          <View style={styles.contactRow}>
+            <Text style={styles.contactIcon}>📍</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.contactLabel}>Service Area</Text>
+              <Text style={styles.contactValueDark}>Greater Sudbury, ON 🇨🇦</Text>
+            </View>
+          </View>
         </View>
       ),
     },
@@ -230,7 +193,6 @@ export function HelpScreen() {
 
   return (
     <View style={styles.outerContainer}>
-      {/* Explicit back button — always visible on web & native */}
       <View style={[styles.backBar, { paddingTop: Platform.OS === 'web' ? 12 : insets.top + 4 }]}>
         <Pressable
           style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
@@ -238,7 +200,7 @@ export function HelpScreen() {
         >
           <Text style={styles.backBtnText}>← Back</Text>
         </Pressable>
-        <Text style={styles.backBarTitle}>Help & Docs</Text>
+        <Text style={styles.backBarTitle}>Join as a Professional</Text>
         <View style={styles.backBtnSpacer} />
       </View>
 
@@ -248,14 +210,20 @@ export function HelpScreen() {
         showsVerticalScrollIndicator={false}
       >
         <LinearGradient
-          colors={['#000000', '#1a1a1a']}
+          colors={['#065F46', '#059669', '#10B981']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
           style={styles.hero}
         >
-          <Text style={styles.heroIcon}>📖</Text>
-          <Text style={styles.heroTitle}>Help & Documentation</Text>
-          <Text style={styles.heroSub}>CareNearby platform guide · Fonctionnalités vérifiées</Text>
-          <View style={styles.versionBadge}>
-            <Text style={styles.versionText}>v1.0.0 · Greater Sudbury, ON</Text>
+          <Text style={styles.heroIcon}>🧑‍⚕️</Text>
+          <Text style={styles.heroTitle}>Join as a Healthcare Professional</Text>
+          <Text style={styles.heroSub}>Register as a PSW, nurse, or healthcare expert and start earning in Greater Sudbury</Text>
+          <View style={styles.heroBadgeRow}>
+            <View style={styles.heroBadge}><Text style={styles.heroBadgeText}>PSW</Text></View>
+            <View style={styles.heroBadge}><Text style={styles.heroBadgeText}>RPN</Text></View>
+            <View style={styles.heroBadge}><Text style={styles.heroBadgeText}>RN</Text></View>
+            <View style={styles.heroBadge}><Text style={styles.heroBadgeText}>OT</Text></View>
+            <View style={styles.heroBadge}><Text style={styles.heroBadgeText}>+ more</Text></View>
           </View>
         </LinearGradient>
 
@@ -275,7 +243,7 @@ export function HelpScreen() {
           ))}
 
           <Text style={styles.footer}>
-            © {new Date().getFullYear()} CareNearby · Professional PSW Services{'\n'}
+            © {new Date().getFullYear()} CareNearby · Private-Pay PSW Services{'\n'}
             Greater Sudbury, ON · All rights reserved
           </Text>
         </View>
@@ -285,12 +253,12 @@ export function HelpScreen() {
 }
 
 const styles = StyleSheet.create({
-  outerContainer: { flex: 1, backgroundColor: '#000' },
+  outerContainer: { flex: 1, backgroundColor: '#065F46' },
 
   backBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingBottom: 10,
-    backgroundColor: '#000',
+    backgroundColor: '#065F46',
   },
   backBtn: { paddingVertical: 6, paddingHorizontal: 4, minWidth: 70 },
   backBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
@@ -300,14 +268,16 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
 
   hero: { alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 28 },
-  heroIcon: { fontSize: 40, marginBottom: 12 },
-  heroTitle: { color: '#fff', fontSize: 24, fontWeight: '800', marginBottom: 6, textAlign: 'center' },
-  heroSub: { color: 'rgba(255,255,255,0.6)', fontSize: 13, textAlign: 'center', marginBottom: 14 },
-  versionBadge: {
-    backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 16,
-    paddingHorizontal: 14, paddingVertical: 5,
+  heroIcon: { fontSize: 44, marginBottom: 12 },
+  heroTitle: { color: '#fff', fontSize: 22, fontWeight: '800', marginBottom: 6, textAlign: 'center', letterSpacing: -0.3 },
+  heroSub: { color: 'rgba(255,255,255,0.75)', fontSize: 13, textAlign: 'center', marginBottom: 18, lineHeight: 19 },
+  heroBadgeRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' },
+  heroBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12,
+    paddingHorizontal: 12, paddingVertical: 5,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
   },
-  versionText: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '600' },
+  heroBadgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 
   body: { padding: 16, gap: 10 },
 
@@ -324,34 +294,40 @@ const styles = StyleSheet.create({
 
   sectionBody: { paddingHorizontal: 16, paddingBottom: 18, gap: 14 },
 
-  checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  checkIcon: { fontSize: 18, width: 26, textAlign: 'center', marginTop: 1 },
-  checkLabel: { fontSize: 14, fontWeight: '600', color: '#000', marginBottom: 2 },
-  checkDesc: { fontSize: 12, color: '#666', lineHeight: 17 },
-  checkBadge: { fontSize: 16, marginTop: 1 },
-
   stepRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   stepBubble: {
     width: 28, height: 28, borderRadius: 14,
-    backgroundColor: '#000', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#065F46', alignItems: 'center', justifyContent: 'center',
     marginTop: 2, flexShrink: 0,
   },
   stepNum: { color: '#fff', fontSize: 13, fontWeight: '700' },
   stepTitle: { fontSize: 14, fontWeight: '700', color: '#000', marginBottom: 2 },
   stepDesc: { fontSize: 12, color: '#666', lineHeight: 17 },
 
-  priceHighlight: {
+  infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  infoIcon: { fontSize: 18, width: 26, textAlign: 'center', marginTop: 1 },
+  infoLabel: { fontSize: 14, fontWeight: '600', color: '#000', marginBottom: 2 },
+  infoDesc: { fontSize: 12, color: '#666', lineHeight: 17 },
+
+  requiredNote: {
+    backgroundColor: '#FFF7ED', borderRadius: 10, padding: 12,
+    borderWidth: 1, borderColor: '#FCD34D',
+  },
+  requiredNoteText: { fontSize: 12, color: '#92400E', fontWeight: '600', lineHeight: 17 },
+
+  rateCard: {
     flexDirection: 'row', alignItems: 'baseline',
     justifyContent: 'center', paddingVertical: 16, gap: 4,
   },
-  priceAmount: { fontSize: 52, fontWeight: '900', color: '#000' },
-  priceUnit: { fontSize: 20, color: '#666', fontWeight: '500' },
+  rateAmount: { fontSize: 52, fontWeight: '900', color: '#065F46' },
+  rateUnit: { fontSize: 20, color: '#666', fontWeight: '500' },
 
   coverageCard: {
-    backgroundColor: '#E8F5E9', borderRadius: 12, padding: 14,
+    backgroundColor: '#ECFDF5', borderRadius: 12, padding: 14,
     alignItems: 'center', marginBottom: 4,
+    borderWidth: 1, borderColor: '#A7F3D0',
   },
-  coverageTitle: { fontSize: 16, fontWeight: '700', color: '#2E7D32', marginBottom: 4 },
+  coverageTitle: { fontSize: 16, fontWeight: '700', color: '#065F46', marginBottom: 4 },
   coverageSub: { fontSize: 13, color: '#555' },
 
   contactRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

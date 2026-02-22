@@ -234,15 +234,12 @@ export function PhoneScreen() {
               </View>
             ))}
           </View>
+
+          <Text style={styles.copyright}>
+            © {new Date().getFullYear()} CareNearby · Greater Sudbury, ON
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
-      
-      <LinearGradient
-        colors={['#0a0a0a', '#111827', '#1e2a4a']}
-        style={styles.bottomGradient}
-      >
-        <Text style={styles.bottomText}>© {new Date().getFullYear()} CareNearby · Professional PSW Services</Text>
-      </LinearGradient>
     </View>
   );
 }
@@ -363,7 +360,5 @@ const styles = StyleSheet.create({
   trustItem: { alignItems: 'center', gap: 4 },
   trustIcon: { fontSize: 20 },
   trustText: { fontSize: 11, color: '#666', fontWeight: '500' },
-  
-  bottomGradient: { paddingVertical: 20, paddingHorizontal: 20, alignItems: 'center' },
-  bottomText: { fontSize: 11, color: 'rgba(255,255,255,0.35)', textAlign: 'center' },
+  copyright: { fontSize: 11, color: '#bbb', textAlign: 'center', paddingVertical: 16, backgroundColor: '#fff' },
 });
