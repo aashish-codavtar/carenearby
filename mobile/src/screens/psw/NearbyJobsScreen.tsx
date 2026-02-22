@@ -1,19 +1,21 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   FlatList,
   Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Linking from 'expo-linking';
 import * as Location from 'expo-location';
-import { apiNearbyJobs, Booking } from '../../api/client';
+import { apiAcceptJob, apiNearbyJobs, Booking } from '../../api/client';
 import { JobCard } from '../../components/JobCard';
 import { JobCardSkeleton } from '../../components/SkeletonLoader';
 import { Colors, ServiceIcons } from '../../utils/colors';
@@ -44,41 +46,55 @@ interface WebLeafletProps {
   center: { lat: number; lng: number };
   jobs: Booking[];
   onJobPress: (job: Booking) => void;
+  onAcceptJob: (job: Booking) => void;
+  filterText: string;
 }
 
-function WebLeafletMap({ center, jobs, onJobPress }: WebLeafletProps) {
+function WebLeafletMap({ center, jobs, onJobPress, onAcceptJob, filterText }: WebLeafletProps) {
   const containerRef = useRef<any>(null);
   const mapRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
+
+  // Inject custom Leaflet CSS for better controls
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const style = document.createElement('style');
+    style.textContent = `
+      .leaflet-control-zoom a { width: 36px !important; height: 36px !important; line-height: 36px !important; font-size: 18px !important; }
+      .leaflet-control-zoom { border-radius: 10px !important; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important; }
+      .leaflet-popup-content-wrapper { border-radius: 14px !important; box-shadow: 0 8px 24px rgba(0,0,0,0.18) !important; }
+      .leaflet-popup-content { margin: 14px 18px !important; font-family: -apple-system, sans-serif; }
+      .cn-accept-btn { background: #34C759; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 14px; font-weight: 700; cursor: pointer; width: 100%; margin-top: 10px; }
+      .cn-accept-btn:hover { background: #28a745; }
+      .cn-detail-btn { background: #007AFF; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 14px; font-weight: 700; cursor: pointer; width: 100%; margin-top: 6px; }
+      .cn-detail-btn:hover { background: #0055cc; }
+    `;
+    document.head.appendChild(style);
+  }, []);
 
   useEffect(() => {
     loadLeaflet().then(() => {
       if (!containerRef.current || mapRef.current) return;
       const L = window.L;
-      const map = L.map(containerRef.current).setView([center.lat, center.lng], 12);
+      const map = L.map(containerRef.current, {
+        zoomControl: true,
+        attributionControl: true,
+      }).setView([center.lat, center.lng], 12);
+
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© <a href="https://openstreetmap.org">OSM</a>',
         maxZoom: 19,
       }).addTo(map);
 
-      // PSW location marker (green)
-      const greenIcon = L.divIcon({ html: '<div style="background:#10B981;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)"></div>', className: '' });
-      L.marker([center.lat, center.lng], { icon: greenIcon }).addTo(map).bindPopup('📍 Your Location');
-
-      // Job markers
-      jobs.forEach(job => {
-        const [lng, lat] = job.location?.coordinates ?? [0, 0];
-        if (!lat || !lng) return;
-        const icon = ServiceIcons[job.serviceType] ?? '🏥';
-        const jobIcon = L.divIcon({ html: `<div style="background:#0A2540;color:#fff;border-radius:12px;padding:4px 8px;font-size:12px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.3)">${icon} $${job.totalPrice}</div>`, className: '' });
-        const marker = L.marker([lat, lng], { icon: jobIcon }).addTo(map);
-        marker.bindPopup(`<b>${job.serviceType}</b><br>$${job.totalPrice} · ${job.hours}h<br><a href="#" onclick="return false;" id="job-${job._id}">View Details →</a>`);
-        marker.on('popupopen', () => {
-          setTimeout(() => {
-            const el = document.getElementById(`job-${job._id}`);
-            if (el) el.onclick = () => { onJobPress(job); return false; };
-          }, 100);
-        });
+      // PSW location marker (green pulsing)
+      const greenIcon = L.divIcon({
+        html: '<div style="background:#10B981;width:18px;height:18px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(16,185,129,0.5)"></div>',
+        className: '',
+        iconAnchor: [9, 9],
       });
+      L.marker([center.lat, center.lng], { icon: greenIcon })
+        .addTo(map)
+        .bindPopup('<b>📍 Your Location</b><br>You are here');
 
       mapRef.current = map;
     });
@@ -88,12 +104,70 @@ function WebLeafletMap({ center, jobs, onJobPress }: WebLeafletProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Update job markers when jobs or filter changes
+  useEffect(() => {
+    if (!mapRef.current || !window.L) return;
+    const L = window.L;
+    const map = mapRef.current;
+
+    // Remove old job markers
+    markersRef.current.forEach(m => map.removeLayer(m));
+    markersRef.current = [];
+
+    const filtered = filterText.trim()
+      ? jobs.filter(j => j.serviceType.toLowerCase().includes(filterText.toLowerCase()))
+      : jobs;
+
+    filtered.forEach(job => {
+      const [lng, lat] = job.location?.coordinates ?? [0, 0];
+      if (!lat || !lng) return;
+      const icon = ServiceIcons[job.serviceType] ?? '🏥';
+      const isRequested = job.status === 'REQUESTED';
+      const jobIcon = L.divIcon({
+        html: `<div style="background:${isRequested ? '#0A2540' : '#6B7280'};color:#fff;border-radius:12px;padding:5px 10px;font-size:13px;font-weight:800;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,0.35);border:2px solid rgba(255,255,255,0.2)">${icon} $${job.totalPrice}</div>`,
+        className: '',
+        iconAnchor: [0, 0],
+      });
+      const marker = L.marker([lat, lng], { icon: jobIcon }).addTo(map);
+      const popupContent = `
+        <div style="min-width:200px">
+          <div style="font-size:16px;font-weight:800;color:#0A2540;margin-bottom:4px">${icon} ${job.serviceType}</div>
+          <div style="font-size:14px;color:#555;margin-bottom:2px">💰 $${job.totalPrice} · ${job.hours}h</div>
+          <div style="font-size:12px;color:#888">${new Date(job.scheduledAt).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+          ${isRequested ? `<button class="cn-accept-btn" id="accept-${job._id}">✅ Accept Job</button>` : ''}
+          <button class="cn-detail-btn" id="detail-${job._id}">View Details →</button>
+        </div>`;
+      marker.bindPopup(popupContent, { maxWidth: 260 });
+      marker.on('popupopen', () => {
+        setTimeout(() => {
+          const acceptEl = document.getElementById(`accept-${job._id}`);
+          if (acceptEl) acceptEl.onclick = () => { onAcceptJob(job); return false; };
+          const detailEl = document.getElementById(`detail-${job._id}`);
+          if (detailEl) detailEl.onclick = () => { onJobPress(job); return false; };
+        }, 100);
+      });
+      markersRef.current.push(marker);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobs, filterText]);
+
+  function handleLocateMe() {
+    if (!mapRef.current) return;
+    mapRef.current.setView([center.lat, center.lng], 14, { animate: true });
+  }
+
   return (
     <View style={styles.mapContainer}>
       {/* @ts-ignore – ref to real DOM div on web */}
       <div ref={containerRef} style={{ width: '100%', flex: 1 }} />
+      {/* Locate me button */}
+      <Pressable style={styles.locateBtn} onPress={handleLocateMe}>
+        <Text style={styles.locateBtnText}>📍</Text>
+      </Pressable>
       <View style={styles.mapOverlay}>
-        <Text style={styles.mapOverlayText}>{jobs.length} jobs · tap a pin for details</Text>
+        <Text style={styles.mapOverlayText}>
+          {filterText ? `Showing: "${filterText}" — ` : ''}{markersRef.current.length} job{markersRef.current.length !== 1 ? 's' : ''} · tap a pin for details
+        </Text>
       </View>
     </View>
   );
@@ -102,7 +176,6 @@ function WebLeafletMap({ center, jobs, onJobPress }: WebLeafletProps) {
 type LocationStatus = 'checking' | 'ok' | 'denied';
 type ViewMode = 'list' | 'map';
 
-// Sudbury city centre fallback coordinates
 const SUDBURY_CENTER = { latitude: 46.4917, longitude: -80.9930 };
 
 export function NearbyJobsScreen() {
@@ -113,6 +186,8 @@ export function NearbyJobsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('checking');
   const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [searchText, setSearchText] = useState('');
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const coordsRef = useRef<{ lat: number; lng: number } | undefined>(undefined);
 
   const load = useCallback(async (showRefresh = false) => {
@@ -145,13 +220,42 @@ export function NearbyJobsScreen() {
     })();
   }, [load]);
 
-  // Auto-refresh every 15s so PSWs see new bookings without manually pulling
+  // Auto-refresh every 15s
   useEffect(() => {
     const timer = setInterval(() => load(), 15_000);
     return () => clearInterval(timer);
   }, [load]);
 
-  const totalEarnings = jobs.reduce((s, j) => s + j.totalPrice, 0);
+  async function quickAccept(job: Booking) {
+    const doAccept = async () => {
+      setAcceptingId(job._id);
+      try {
+        await apiAcceptJob(job._id);
+        await load();
+        nav.navigate('JobDetail', { job: { ...job, status: 'ACCEPTED' } });
+      } catch (e: any) {
+        if (Platform.OS === 'web') alert(e.message || 'Failed to accept job.');
+        else Alert.alert('Error', e.message || 'Failed to accept job.');
+      }
+      setAcceptingId(null);
+    };
+
+    if (Platform.OS === 'web') {
+      if (confirm(`Accept ${job.serviceType} job — $${job.totalPrice}? Are you sure?`)) doAccept();
+    } else {
+      Alert.alert('Accept Job', `Accept ${job.serviceType} job for $${job.totalPrice}?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Accept', onPress: doAccept },
+      ]);
+    }
+  }
+
+  const filteredJobs = searchText.trim()
+    ? jobs.filter(j => j.serviceType.toLowerCase().includes(searchText.toLowerCase()))
+    : jobs;
+
+  const totalEarnings = filteredJobs.reduce((s, j) => s + j.totalPrice, 0);
+  const mapCenter = coordsRef.current ?? { lat: SUDBURY_CENTER.latitude, lng: SUDBURY_CENTER.longitude };
 
   return (
     <View style={styles.container}>
@@ -163,10 +267,9 @@ export function NearbyJobsScreen() {
         <View style={styles.headerTop}>
           <View>
             <Text style={styles.headerTitle}>Find Jobs</Text>
-            <Text style={styles.headerSub}>{jobs.length} available near you</Text>
+            <Text style={styles.headerSub}>{filteredJobs.length} available near you</Text>
           </View>
           <View style={styles.headerRight}>
-            {/* List / Map toggle */}
             <Pressable
               style={styles.viewToggle}
               onPress={() => setViewMode(v => v === 'list' ? 'map' : 'list')}
@@ -181,11 +284,29 @@ export function NearbyJobsScreen() {
           </View>
         </View>
 
+        {/* Search bar */}
+        <View style={styles.searchBar}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            value={searchText}
+            onChangeText={setSearchText}
+            placeholder="Search by service type…"
+            placeholderTextColor="rgba(255,255,255,0.45)"
+            returnKeyType="search"
+          />
+          {searchText.length > 0 && (
+            <Pressable onPress={() => setSearchText('')} style={styles.searchClear}>
+              <Text style={styles.searchClearText}>✕</Text>
+            </Pressable>
+          )}
+        </View>
+
         {/* Earnings preview */}
-        {jobs.length > 0 && (
+        {filteredJobs.length > 0 && (
           <View style={styles.earningsBanner}>
             <View style={styles.earningsItem}>
-              <Text style={styles.earningsNum}>{jobs.length}</Text>
+              <Text style={styles.earningsNum}>{filteredJobs.length}</Text>
               <Text style={styles.earningsLabel}>Available Jobs</Text>
             </View>
             <View style={styles.earningsDivider} />
@@ -208,12 +329,14 @@ export function NearbyJobsScreen() {
         )}
       </LinearGradient>
 
-      {/* Map view – web: Leaflet via CDN */}
+      {/* Map view – web: Leaflet */}
       {viewMode === 'map' && Platform.OS === 'web' && (
         <WebLeafletMap
-          center={coordsRef.current ?? { lat: SUDBURY_CENTER.latitude, lng: SUDBURY_CENTER.longitude }}
-          jobs={jobs}
+          center={mapCenter}
+          jobs={filteredJobs}
           onJobPress={job => nav.navigate('JobDetail', { job })}
+          onAcceptJob={quickAccept}
+          filterText={searchText}
         />
       )}
 
@@ -223,13 +346,16 @@ export function NearbyJobsScreen() {
           <MapView
             style={styles.mapFull}
             initialRegion={{
-              latitude:  coordsRef.current?.lat ?? SUDBURY_CENTER.latitude,
-              longitude: coordsRef.current?.lng ?? SUDBURY_CENTER.longitude,
+              latitude:  mapCenter.lat,
+              longitude: mapCenter.lng,
               latitudeDelta:  0.15,
               longitudeDelta: 0.15,
             }}
+            showsUserLocation
+            showsMyLocationButton
+            showsCompass
+            showsScale
           >
-            {/* PSW current location */}
             {coordsRef.current && Marker && (
               <Marker
                 coordinate={{ latitude: coordsRef.current.lat, longitude: coordsRef.current.lng }}
@@ -237,8 +363,7 @@ export function NearbyJobsScreen() {
                 pinColor={Colors.onlineGreen}
               />
             )}
-            {/* Job markers */}
-            {jobs.map(job => {
+            {filteredJobs.map(job => {
               const [lng, lat] = job.location?.coordinates ?? [0, 0];
               if (!lat || !lng) return null;
               return Marker ? (
@@ -253,43 +378,63 @@ export function NearbyJobsScreen() {
             })}
           </MapView>
           <View style={styles.mapOverlay}>
-            <Text style={styles.mapOverlayText}>{jobs.length} jobs · tap a pin for details</Text>
+            <Text style={styles.mapOverlayText}>{filteredJobs.length} jobs · tap a pin for details</Text>
           </View>
         </View>
       )}
 
       {/* Jobs list */}
-      {viewMode === 'list' && <FlatList
-        data={loading ? [] : jobs}
-        keyExtractor={i => i._id}
-        contentContainerStyle={styles.list}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={Colors.systemGreen} />
-        }
-        ListHeaderComponent={loading ? (
-          <View style={{ marginTop: 16 }}>
-            <JobCardSkeleton />
-            <JobCardSkeleton />
-            <JobCardSkeleton />
-          </View>
-        ) : null}
-        ListEmptyComponent={!loading ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>🗺️</Text>
-            <Text style={styles.emptyTitle}>No jobs nearby</Text>
-            <Text style={styles.emptySub}>
-              There are no available jobs in your area right now.{'\n'}Pull down to refresh.
-            </Text>
-          </View>
-        ) : null}
-        renderItem={({ item }) => (
-          <JobCard
-            job={item}
-            distanceKm={item.distanceKm}
-            onPress={() => nav.navigate('JobDetail', { job: item })}
-          />
-        )}
-      />}
+      {viewMode === 'list' && (
+        <FlatList
+          data={loading ? [] : filteredJobs}
+          keyExtractor={i => i._id}
+          contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={Colors.systemGreen} />
+          }
+          ListHeaderComponent={loading ? (
+            <View style={{ marginTop: 16 }}>
+              <JobCardSkeleton />
+              <JobCardSkeleton />
+              <JobCardSkeleton />
+            </View>
+          ) : null}
+          ListEmptyComponent={!loading ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyIcon}>{searchText ? '🔍' : '🗺️'}</Text>
+              <Text style={styles.emptyTitle}>{searchText ? 'No matching jobs' : 'No jobs nearby'}</Text>
+              <Text style={styles.emptySub}>
+                {searchText
+                  ? `No jobs match "${searchText}". Try a different search.`
+                  : 'There are no available jobs in your area right now.\nPull down to refresh.'}
+              </Text>
+            </View>
+          ) : null}
+          renderItem={({ item }) => (
+            <View>
+              <JobCard
+                job={item}
+                distanceKm={item.distanceKm}
+                onPress={() => nav.navigate('JobDetail', { job: item })}
+              />
+              {/* Quick Accept button for REQUESTED jobs */}
+              {item.status === 'REQUESTED' && (
+                <Pressable
+                  style={[styles.quickAcceptBtn, acceptingId === item._id && { opacity: 0.6 }]}
+                  onPress={() => quickAccept(item)}
+                  disabled={acceptingId === item._id}
+                >
+                  {acceptingId === item._id ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.quickAcceptText}>✅  Accept This Job  ·  ${item.totalPrice}</Text>
+                  )}
+                </Pressable>
+              )}
+            </View>
+          )}
+        />
+      )}
     </View>
   );
 }
@@ -297,28 +442,71 @@ export function NearbyJobsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.systemGroupedBackground },
   header: { paddingHorizontal: 20, paddingBottom: 20 },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },
   headerTitle: { color: '#fff', fontSize: 28, fontWeight: '800', marginBottom: 2 },
   headerSub: { color: 'rgba(255,255,255,0.65)', fontSize: 14 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  viewToggle: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
-  viewToggleText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  locationBadge: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
-  locationBadgeText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  mapContainer: { flex: 1, position: 'relative' },
-  mapFull: { flex: 1 },
-  mapOverlay: { position: 'absolute', bottom: 16, left: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: 10, alignItems: 'center' },
-  mapOverlayText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  viewToggle: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+  viewToggleText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  locationBadge: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8 },
+  locationBadgeText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+
+  // Search bar
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10,
+    marginBottom: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    gap: 10,
+  },
+  searchIcon: { fontSize: 16 },
+  searchInput: { flex: 1, color: '#fff', fontSize: 15, fontWeight: '500' },
+  searchClear: { width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  searchClearText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+
+  // Earnings banner
   earningsBanner: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 16, padding: 14, marginBottom: 8 },
   earningsItem: { flex: 1, alignItems: 'center' },
   earningsNum: { color: '#fff', fontSize: 16, fontWeight: '800' },
-  earningsLabel: { color: 'rgba(255,255,255,0.65)', fontSize: 10, marginTop: 2, textAlign: 'center' },
+  earningsLabel: { color: 'rgba(255,255,255,0.65)', fontSize: 11, marginTop: 2, textAlign: 'center' },
   earningsDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 8 },
   locationWarning: { backgroundColor: 'rgba(255,149,0,0.2)', borderRadius: 10, padding: 10, marginTop: 8 },
   locationWarningText: { color: '#fff', fontSize: 12, textAlign: 'center' },
+
+  // Map
+  mapContainer: { flex: 1, position: 'relative' },
+  mapFull: { flex: 1 },
+  mapOverlay: { position: 'absolute', bottom: 16, left: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 12, padding: 10, alignItems: 'center' },
+  mapOverlayText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  locateBtn: {
+    position: 'absolute', bottom: 70, right: 16,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6,
+  },
+  locateBtnText: { fontSize: 22 },
+
+  // List
   list: { paddingTop: 16, paddingBottom: 40 },
   empty: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 32 },
   emptyIcon: { fontSize: 48, marginBottom: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: '800', color: Colors.label, marginBottom: 8 },
-  emptySub: { fontSize: 14, color: Colors.secondaryLabel, textAlign: 'center', lineHeight: 21 },
+  emptyTitle: { fontSize: 20, fontWeight: '800', color: Colors.label, marginBottom: 8 },
+  emptySub: { fontSize: 15, color: Colors.secondaryLabel, textAlign: 'center', lineHeight: 22 },
+
+  // Quick accept button (shown below each REQUESTED job card)
+  quickAcceptBtn: {
+    marginHorizontal: 16,
+    marginTop: -4,
+    marginBottom: 16,
+    backgroundColor: Colors.onlineGreen,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+    shadowColor: Colors.onlineGreen,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  quickAcceptText: { color: '#fff', fontSize: 16, fontWeight: '800' },
 });

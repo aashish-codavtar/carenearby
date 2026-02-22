@@ -4,7 +4,15 @@ const KEYS = {
   TOKEN: '@carenearby/token',
   USER: '@carenearby/user',
   PHOTO_URI: '@carenearby/photo_uri',
+  DOCUMENTS: '@carenearby/documents',
 } as const;
+
+export interface StoredDocument {
+  id: string;
+  label: string;
+  uri: string;
+  uploadedAt: string;
+}
 
 export interface StoredUser {
   id: string;
@@ -50,5 +58,23 @@ export const Storage = {
 
   async clearPhotoUri(): Promise<void> {
     await AsyncStorage.removeItem(KEYS.PHOTO_URI);
+  },
+
+  async getDocuments(): Promise<StoredDocument[]> {
+    const raw = await AsyncStorage.getItem(KEYS.DOCUMENTS);
+    if (!raw) return [];
+    try { return JSON.parse(raw) as StoredDocument[]; } catch { return []; }
+  },
+
+  async saveDocument(doc: StoredDocument): Promise<void> {
+    const docs = await Storage.getDocuments();
+    const idx = docs.findIndex(d => d.id === doc.id);
+    if (idx >= 0) docs[idx] = doc; else docs.push(doc);
+    await AsyncStorage.setItem(KEYS.DOCUMENTS, JSON.stringify(docs));
+  },
+
+  async removeDocument(id: string): Promise<void> {
+    const docs = await Storage.getDocuments();
+    await AsyncStorage.setItem(KEYS.DOCUMENTS, JSON.stringify(docs.filter(d => d.id !== id)));
   },
 };
