@@ -1,5 +1,5 @@
 // CareNearby Service Worker — enables offline shell + PWA install
-const CACHE = 'carenearby-v4';
+const CACHE = 'carenearby-v5';
 const SHELL = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
