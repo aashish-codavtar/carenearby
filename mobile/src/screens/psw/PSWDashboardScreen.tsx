@@ -19,10 +19,67 @@ import { Colors, ServiceIcons } from '../../utils/colors';
 import { JobCard } from '../../components/JobCard';
 import { StatusBadge } from '../../components/StatusBadge';
 
+type Lang = 'en' | 'fr';
+const T = {
+  en: {
+    location: '📍 Greater Sudbury, ON',
+    onlineSub: "You're online · Accepting job requests",
+    offlineSub: 'Go online to start accepting jobs',
+    onlineLabel: 'ONLINE',
+    goOnline: 'GO ONLINE',
+    tapOffline: 'Tap to go offline',
+    tapStart: 'Tap to start',
+    today: 'Today',
+    thisWeek: 'This Week',
+    totalJobs: 'Total Jobs',
+    pendingTitle: 'Awaiting Admin Approval',
+    pendingSub: 'Your credentials are under review. You\'ll receive jobs once approved — usually within 1–2 business days.',
+    activeJob: 'Active Job',
+    navLabel: 'NAVIGATION',
+    quickActions: 'Quick Actions',
+    historyLabel: 'HISTORY',
+    recentJobs: 'Recent Jobs',
+    seeAll: 'See all →',
+    noJobsTitle: 'No jobs yet',
+    noJobsSub: 'Go online and find nearby jobs to get started.',
+    findJobs: 'Find Jobs',
+    myJobs: 'My Jobs',
+    documents: 'Documents',
+    profile: 'Profile',
+  },
+  fr: {
+    location: '📍 Grand Sudbury, ON',
+    onlineSub: 'Vous êtes en ligne · Accepter des demandes',
+    offlineSub: 'Connectez-vous pour accepter des emplois',
+    onlineLabel: 'EN LIGNE',
+    goOnline: 'SE CONNECTER',
+    tapOffline: 'Toucher pour se déconnecter',
+    tapStart: 'Toucher pour commencer',
+    today: "Aujourd'hui",
+    thisWeek: 'Cette Semaine',
+    totalJobs: 'Total Emplois',
+    pendingTitle: "En attente d'approbation",
+    pendingSub: 'Vos références sont en cours d\'examen. Vous recevrez des emplois une fois approuvé — habituellement 1–2 jours ouvrables.',
+    activeJob: 'Emploi actif',
+    navLabel: 'NAVIGATION',
+    quickActions: 'Actions rapides',
+    historyLabel: 'HISTORIQUE',
+    recentJobs: 'Emplois récents',
+    seeAll: 'Voir tout →',
+    noJobsTitle: 'Aucun emploi encore',
+    noJobsSub: 'Connectez-vous et trouvez des emplois à proximité pour commencer.',
+    findJobs: 'Trouver des emplois',
+    myJobs: 'Mes emplois',
+    documents: 'Documents',
+    profile: 'Profil',
+  },
+} as const;
+
 export function PSWDashboardScreen() {
   const { user } = useAuth();
   const nav = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  const [lang, setLang] = useState<Lang>('en');
   const [jobs, setJobs] = useState<Booking[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isOnline, setIsOnline] = useState(false);
@@ -31,6 +88,7 @@ export function PSWDashboardScreen() {
   const [toggling, setToggling] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
+  const t = T[lang];
 
   const activeJob = jobs.find(j => j.status === 'ACCEPTED' || j.status === 'STARTED');
   const todayEarnings = jobs
@@ -97,10 +155,10 @@ export function PSWDashboardScreen() {
   const glowOpacity = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.7] });
 
   const QUICK_ACTIONS = [
-    { icon: '📍', label: 'Find Jobs',  screen: 'NearbyJobs', gradColors: ['#EFF6FF', '#DBEAFE'] as [string, string], accent: Colors.systemBlue },
-    { icon: '📋', label: 'My Jobs',   screen: 'MyJobs',      gradColors: ['#ECFDF5', '#D1FAE5'] as [string, string], accent: Colors.onlineGreen },
-    { icon: '💰', label: 'Earnings',  screen: 'Earnings',    gradColors: ['#FFFBEB', '#FEF3C7'] as [string, string], accent: Colors.earningsGold },
-    { icon: '👤', label: 'Profile',   screen: 'PSWProfile',  gradColors: ['#F5F3FF', '#EDE9FE'] as [string, string], accent: Colors.systemPurple },
+    { icon: '📍', label: t.findJobs,   screen: 'NearbyJobs',   gradColors: ['#EFF6FF', '#DBEAFE'] as [string, string], accent: Colors.systemBlue },
+    { icon: '📋', label: t.myJobs,     screen: 'MyJobs',        gradColors: ['#ECFDF5', '#D1FAE5'] as [string, string], accent: Colors.onlineGreen },
+    { icon: '📄', label: t.documents,  screen: 'PSWDocuments',  gradColors: ['#FFFBEB', '#FEF3C7'] as [string, string], accent: Colors.earningsGold },
+    { icon: '👤', label: t.profile,    screen: 'PSWProfile',    gradColors: ['#F5F3FF', '#EDE9FE'] as [string, string], accent: Colors.systemPurple },
   ];
 
   return (
@@ -119,16 +177,24 @@ export function PSWDashboardScreen() {
       >
         <View style={styles.heroTop}>
           <View style={styles.locationPill}>
-            <Text style={styles.locationText}>📍 Greater Sudbury, ON</Text>
+            <Text style={styles.locationText}>{t.location}</Text>
           </View>
-          <Pressable style={styles.avatarBtn} onPress={() => nav.navigate('PSWProfile')}>
-            <Text style={styles.avatarBtnText}>{user?.name?.[0]?.toUpperCase() ?? '?'}</Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Pressable
+              style={styles.langToggle}
+              onPress={() => setLang(l => l === 'en' ? 'fr' : 'en')}
+            >
+              <Text style={styles.langToggleText}>{lang === 'en' ? 'FR' : 'EN'}</Text>
+            </Pressable>
+            <Pressable style={styles.avatarBtn} onPress={() => nav.navigate('PSWProfile')}>
+              <Text style={styles.avatarBtnText}>{user?.name?.[0]?.toUpperCase() ?? '?'}</Text>
+            </Pressable>
+          </View>
         </View>
 
         <Text style={styles.heroGreeting}>Hey, {firstName} 👋</Text>
         <Text style={styles.heroSub}>
-          {isOnline ? 'You\'re online · Accepting job requests' : 'Go online to start accepting jobs'}
+          {isOnline ? t.onlineSub : t.offlineSub}
         </Text>
 
         {/* Online/Offline Toggle — Uber-style */}
@@ -144,10 +210,10 @@ export function PSWDashboardScreen() {
             >
               <Text style={styles.onlineBtnIcon}>{isOnline ? '🟢' : '⚫'}</Text>
               <Text style={[styles.onlineBtnText, { color: isOnline ? Colors.onlineGreen : '#fff' }]}>
-                {isOnline ? 'ONLINE' : 'GO ONLINE'}
+                {isOnline ? t.onlineLabel : t.goOnline}
               </Text>
               <Text style={[styles.onlineBtnSub, { color: isOnline ? Colors.systemGray : 'rgba(255,255,255,0.6)' }]}>
-                {isOnline ? 'Tap to go offline' : 'Tap to start'}
+                {isOnline ? t.tapOffline : t.tapStart}
               </Text>
             </Pressable>
           </Animated.View>
@@ -157,17 +223,17 @@ export function PSWDashboardScreen() {
         <View style={styles.earningsRow}>
           <View style={styles.earningsItem}>
             <Text style={styles.earningsNum}>${todayEarnings}</Text>
-            <Text style={styles.earningsLabel}>Today</Text>
+            <Text style={styles.earningsLabel}>{t.today}</Text>
           </View>
           <View style={styles.earningsDivider} />
           <View style={styles.earningsItem}>
             <Text style={styles.earningsNum}>${weekEarnings}</Text>
-            <Text style={styles.earningsLabel}>This Week</Text>
+            <Text style={styles.earningsLabel}>{t.thisWeek}</Text>
           </View>
           <View style={styles.earningsDivider} />
           <View style={styles.earningsItem}>
             <Text style={styles.earningsNum}>{jobs.filter(j => j.status === 'COMPLETED').length}</Text>
-            <Text style={styles.earningsLabel}>Total Jobs</Text>
+            <Text style={styles.earningsLabel}>{t.totalJobs}</Text>
           </View>
         </View>
       </LinearGradient>
@@ -177,10 +243,8 @@ export function PSWDashboardScreen() {
         <View style={styles.pendingBanner}>
           <Text style={styles.pendingBannerIcon}>⏳</Text>
           <View style={{ flex: 1 }}>
-            <Text style={styles.pendingBannerTitle}>Awaiting Admin Approval</Text>
-            <Text style={styles.pendingBannerSub}>
-              Your credentials are under review. You'll receive jobs once approved — usually within 1–2 business days.
-            </Text>
+            <Text style={styles.pendingBannerTitle}>{t.pendingTitle}</Text>
+            <Text style={styles.pendingBannerSub}>{t.pendingSub}</Text>
           </View>
         </View>
       )}
@@ -195,7 +259,7 @@ export function PSWDashboardScreen() {
             <View style={styles.activeBannerLeft}>
               <Text style={styles.activeBannerIcon}>{ServiceIcons[activeJob.serviceType] ?? '🏥'}</Text>
               <View>
-                <Text style={styles.activeBannerTitle}>Active Job</Text>
+                <Text style={styles.activeBannerTitle}>{t.activeJob}</Text>
                 <Text style={styles.activeBannerSub}>
                   {activeJob.serviceType} · {activeJob.customer.name}
                 </Text>
@@ -211,8 +275,8 @@ export function PSWDashboardScreen() {
 
       {/* ── Quick Actions ─────────────────────────────────────────── */}
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionLabel}>NAVIGATION</Text>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <Text style={styles.sectionLabel}>{t.navLabel}</Text>
+        <Text style={styles.sectionTitle}>{t.quickActions}</Text>
       </View>
 
       <View style={styles.quickActions}>
@@ -233,11 +297,11 @@ export function PSWDashboardScreen() {
       {/* ── Recent Jobs ───────────────────────────────────────────── */}
       <View style={styles.sectionHeader}>
         <View>
-          <Text style={styles.sectionLabel}>HISTORY</Text>
-          <Text style={styles.sectionTitle}>Recent Jobs</Text>
+          <Text style={styles.sectionLabel}>{t.historyLabel}</Text>
+          <Text style={styles.sectionTitle}>{t.recentJobs}</Text>
         </View>
         <Pressable onPress={() => nav.navigate('MyJobs')} style={styles.seeAllBtn}>
-          <Text style={styles.seeAll}>See all →</Text>
+          <Text style={styles.seeAll}>{t.seeAll}</Text>
         </Pressable>
       </View>
 
@@ -248,8 +312,8 @@ export function PSWDashboardScreen() {
       {!loading && jobs.length === 0 && (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>📋</Text>
-          <Text style={styles.emptyTitle}>No jobs yet</Text>
-          <Text style={styles.emptySub}>Go online and find nearby jobs to get started.</Text>
+          <Text style={styles.emptyTitle}>{t.noJobsTitle}</Text>
+          <Text style={styles.emptySub}>{t.noJobsSub}</Text>
         </View>
       )}
     </ScrollView>
@@ -264,6 +328,12 @@ const styles = StyleSheet.create({
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   locationPill: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
   locationText: { color: '#fff', fontSize: 13, fontWeight: '500' },
+  langToggle: {
+    paddingHorizontal: 10, paddingVertical: 5,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+  },
+  langToggleText: { color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
   avatarBtn: {
     width: 38, height: 38, borderRadius: 19,
     backgroundColor: 'rgba(255,255,255,0.2)',

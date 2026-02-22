@@ -23,6 +23,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Rehydrate from AsyncStorage on mount
   useEffect(() => {
+    // Request persistent storage on web so the browser never evicts auth data when the tab is closed
+    if (typeof navigator !== 'undefined' && navigator.storage && typeof navigator.storage.persist === 'function') {
+      navigator.storage.persist();
+    }
     (async () => {
       const [token, user] = await Promise.all([Storage.getToken(), Storage.getUser()]);
       setState({ token, user, isLoading: false });
