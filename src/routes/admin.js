@@ -119,6 +119,99 @@ router.post(
   }
 );
 
+// ── GET /admin/psws/:id ───────────────────────────────────────────────────────
+// Get full detail for one PSW including submitted documents.
+router.get(
+  '/psws/:id',
+  authenticate,
+  requireRole('ADMIN'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({ error: 'Invalid PSW ID' });
+      }
+
+      const user = await User.findOne({ _id: id, role: 'PSW' }).lean();
+      if (!user) return res.status(404).json({ error: 'PSW not found' });
+
+      const profile = await PSWProfile.findOne({ userId: id }).lean();
+
+      res.json({ psw: { ...user, profile } });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// ── POST /admin/psws/:id/verify-document ──────────────────────────────────────
+// Admin verifies or rejects a specific submitted document.
+// Body: { docType: string, verified: boolean, rejectionNote?: string }
+router.post(
+  '/psws/:id/verify-document',
+  authenticate,
+  requireRole('ADMIN'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { docType, verified, rejectionNote } = req.body;
+
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({ error: 'Invalid PSW ID' });
+      }
+      if (!docType) return res.status(400).json({ error: 'docType is required' });
+
+      const profile = await PSWProfile.findOne({ userId: id });
+      if (!profile) return res.status(404).json({ error: 'PSW profile not found' });
+
+      const doc = profile.submittedDocuments.find(d => d.docType === docType);
+      if (!doc) return res.status(404).json({ error: 'Document not found' });
+
+      doc.verifiedByAdmin = !!verified;
+      doc.verifiedAt      = verified ? new Date() : undefined;
+      doc.rejectionNote   = rejectionNote || '';
+      await profile.save();
+
+      res.json({ message: verified ? 'Document verified' : 'Document rejected', docType });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// ── PATCH /admin/psws/:id/police-check ────────────────────────────────────────
+// Admin toggles policeCheckCleared for a PSW.
+// Body: { cleared: boolean }
+router.patch(
+  '/psws/:id/police-check',
+  authenticate,
+  requireRole('ADMIN'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { cleared } = req.body;
+
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({ error: 'Invalid PSW ID' });
+      }
+
+      const profile = await PSWProfile.findOneAndUpdate(
+        { userId: id },
+        { policeCheckCleared: !!cleared },
+        { new: true }
+      );
+      if (!profile) return res.status(404).json({ error: 'PSW profile not found' });
+
+      res.json({ message: `Police check ${cleared ? 'cleared' : 'uncleared'}`, policeCheckCleared: profile.policeCheckCleared });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
 // ── GET /admin/bookings ───────────────────────────────────────────────────────
 // List all bookings with pagination. Optional filter: ?status=REQUESTED|ACCEPTED|...
 router.get(

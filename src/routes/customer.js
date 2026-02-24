@@ -211,6 +211,49 @@ router.patch(
   }
 );
 
+// ── POST /profile/documents ───────────────────────────────────────────────────
+// PSW uploads a credential document (as base64 data URL) for admin review.
+// Body: { docType: string, label: string, dataUrl: string }
+router.post(
+  '/profile/documents',
+  authenticate,
+  async (req, res) => {
+    try {
+      if (req.user.role !== 'PSW') {
+        return res.status(403).json({ error: 'Only PSW accounts can upload documents' });
+      }
+
+      const { docType, label, dataUrl } = req.body;
+      if (!docType || !dataUrl) {
+        return res.status(400).json({ error: 'docType and dataUrl are required' });
+      }
+
+      // Upsert: replace existing doc of same type or push new one
+      const profile = await PSWProfile.findOne({ userId: req.user._id });
+      if (!profile) return res.status(404).json({ error: 'PSW profile not found' });
+
+      const idx = profile.submittedDocuments.findIndex(d => d.docType === docType);
+      if (idx >= 0) {
+        profile.submittedDocuments[idx] = {
+          docType, label, dataUrl,
+          submittedAt: new Date(),
+          verifiedByAdmin: false,
+          verifiedAt: undefined,
+          rejectionNote: '',
+        };
+      } else {
+        profile.submittedDocuments.push({ docType, label, dataUrl, submittedAt: new Date() });
+      }
+
+      await profile.save();
+      res.json({ message: 'Document uploaded', docType });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
 // ── PATCH /profile ────────────────────────────────────────────────────────────
 // Update the authenticated user's own profile fields.
 router.patch(
@@ -234,6 +277,16 @@ router.patch(
       if (updates.name) updates.name = sanitizeName(updates.name);
 
       const user = await User.findByIdAndUpdate(req.user._id, updates, { new: true }).select('-__v');
+
+      // If PSW also provided a photoUrl (base64), update PSWProfile
+      if (req.user.role === 'PSW' && req.body.photoUrl) {
+        await PSWProfile.findOneAndUpdate(
+          { userId: req.user._id },
+          { photoUrl: req.body.photoUrl },
+          { upsert: true }
+        );
+      }
+
       res.json({ message: 'Profile updated', user });
     } catch (err) {
       console.error(err);

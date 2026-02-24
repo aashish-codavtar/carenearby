@@ -122,11 +122,21 @@ export function apiUpdateProfile(payload: {
   return request<{ user: UserProfile }>('PATCH', '/profile', payload);
 }
 
+// ─── Documents ────────────────────────────────────────────────────────────────
+
+export function apiUploadDocument(payload: { docType: string; label: string; dataUrl: string }) {
+  return request<{ message: string; docType: string }>('POST', '/profile/documents', payload);
+}
+
 // ─── Admin ────────────────────────────────────────────────────────────────────
 
 export function apiGetPSWs(approved?: boolean) {
   const qs = approved !== undefined ? `?approved=${approved}` : '';
   return request<{ psws: PSWEntry[] }>('GET', `/admin/psws${qs}`);
+}
+
+export function apiGetPSWDetail(id: string) {
+  return request<{ psw: PSWEntry }>('GET', `/admin/psws/${id}`);
 }
 
 export function apiApprovePSW(id: string) {
@@ -135,6 +145,14 @@ export function apiApprovePSW(id: string) {
 
 export function apiRejectPSW(id: string) {
   return request<{ message: string }>('POST', `/admin/psws/${id}/reject`);
+}
+
+export function apiVerifyDocument(pswId: string, payload: { docType: string; verified: boolean; rejectionNote?: string }) {
+  return request<{ message: string; docType: string }>('POST', `/admin/psws/${pswId}/verify-document`, payload);
+}
+
+export function apiTogglePoliceCheck(pswId: string, cleared: boolean) {
+  return request<{ message: string; policeCheckCleared: boolean }>('PATCH', `/admin/psws/${pswId}/police-check`, { cleared });
 }
 
 export function apiGetAllBookings(params?: { status?: string; page?: number; limit?: number }) {
@@ -147,6 +165,16 @@ export function apiGetAllBookings(params?: { status?: string; page?: number; lim
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface SubmittedDocument {
+  docType: string;
+  label: string;
+  dataUrl: string;
+  submittedAt: string;
+  verifiedByAdmin: boolean;
+  verifiedAt?: string;
+  rejectionNote?: string;
+}
 
 export interface Booking {
   _id: string;
@@ -201,5 +229,13 @@ export interface PSWEntry {
     photoUrl?: string;
     specialties?: string[];
     policeCheckCleared?: boolean;
+    qualificationType?: string;
+    licenseNumber?: string;
+    collegeName?: string;
+    firstAidCertified?: boolean;
+    driversLicense?: boolean;
+    ownTransportation?: boolean;
+    insuranceVerified?: boolean;
+    submittedDocuments?: SubmittedDocument[];
   };
 }

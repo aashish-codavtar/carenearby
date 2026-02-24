@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Platform,
   RefreshControl,
   StyleSheet,
   Text,
@@ -10,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { PSWEntry, apiApprovePSW, apiGetPSWs } from '../../api/client';
 import { Colors } from '../../utils/colors';
 
@@ -22,6 +24,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 export function PSWListScreen() {
+  const nav = useNavigation<any>();
   const [psws, setPSWs] = useState<PSWEntry[]>([]);
   const [filter, setFilter] = useState<Filter>('ALL');
   const [loading, setLoading] = useState(true);
@@ -44,28 +47,30 @@ export function PSWListScreen() {
   useEffect(() => { load(); }, [load]);
 
   async function handleApprove(psw: PSWEntry) {
-    Alert.alert(
-      'Approve PSW',
-      `Approve ${psw.name} as a verified PSW?`,
-      [
+    const doApprove = async () => {
+      setApprovingId(psw._id);
+      try {
+        await apiApprovePSW(psw._id);
+        if (Platform.OS === 'web') alert(`${psw.name} is now a verified PSW.`);
+        else Alert.alert('Approved', `${psw.name} is now a verified PSW.`);
+        load();
+      } catch (e: any) {
+        const msg = (e as any).message ?? 'Could not approve.';
+        if (Platform.OS === 'web') alert(msg);
+        else Alert.alert('Error', msg);
+      } finally {
+        setApprovingId(null);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Approve ${psw.name} as a verified PSW?`)) doApprove();
+    } else {
+      Alert.alert('Approve PSW', `Approve ${psw.name} as a verified PSW?`, [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Approve',
-          onPress: async () => {
-            setApprovingId(psw._id);
-            try {
-              await apiApprovePSW(psw._id);
-              Alert.alert('Approved', `${psw.name} is now a verified PSW.`);
-              load();
-            } catch (e: any) {
-              Alert.alert('Error', e.message ?? 'Could not approve.');
-            } finally {
-              setApprovingId(null);
-            }
-          },
-        },
-      ],
-    );
+        { text: 'Approve', onPress: doApprove },
+      ]);
+    }
   }
 
   function renderPSW({ item }: { item: PSWEntry }) {
@@ -78,6 +83,10 @@ export function PSWListScreen() {
     const hasCar     = (item.profile as any)?.ownTransportation ?? false;
 
     return (
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => nav.navigate('PSWDetail', { pswId: item._id })}
+      >
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.avatar}>
@@ -141,20 +150,30 @@ export function PSWListScreen() {
               {isApproved ? '✓ Approved' : '⏳ Pending Review'}
             </Text>
           </View>
-          {!isApproved && (
+          <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity
-              style={styles.approveBtn}
-              onPress={() => handleApprove(item)}
+              style={styles.detailBtn}
+              onPress={() => nav.navigate('PSWDetail', { pswId: item._id })}
               activeOpacity={0.8}
-              disabled={approvingId === item._id}
             >
-              <Text style={styles.approveBtnText}>
-                {approvingId === item._id ? '...' : 'Approve'}
-              </Text>
+              <Text style={styles.detailBtnText}>📋 Docs</Text>
             </TouchableOpacity>
-          )}
+            {!isApproved && (
+              <TouchableOpacity
+                style={styles.approveBtn}
+                onPress={() => handleApprove(item)}
+                activeOpacity={0.8}
+                disabled={approvingId === item._id}
+              >
+                <Text style={styles.approveBtnText}>
+                  {approvingId === item._id ? '...' : 'Approve'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
+      </TouchableOpacity>
     );
   }
 
@@ -280,6 +299,15 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   approvalText: { fontSize: 13, fontWeight: '600' },
+  detailBtn: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  detailBtnText: { color: '#1D4ED8', fontSize: 13, fontWeight: '600' },
   approveBtn: {
     backgroundColor: Colors.systemGreen,
     borderRadius: 10,

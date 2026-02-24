@@ -17,8 +17,8 @@ import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
 import { useAuth } from '../../context/AuthContext';
-import { apiGetProfile, UserProfile } from '../../api/client';
-import { Storage, StoredDocument } from '../../utils/storage';
+import { apiGetProfile, apiUpdateProfile, UserProfile } from '../../api/client';
+import { Storage } from '../../utils/storage';
 
 // ── Verified badge ─────────────────────────────────────────────────────────────
 function VerifiedChip({ label }: { label: string }) {
@@ -76,14 +76,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Divider() { return <View style={styles.divider} />; }
 
-// ── Document types PSWs can upload ────────────────────────────────────────────
-const DOC_TYPES = [
-  { id: 'police_check',   label: 'Police Check',          icon: '🛡️' },
-  { id: 'first_aid',      label: 'First Aid Certificate', icon: '🚑' },
-  { id: 'psw_certificate', label: 'PSW Certificate',      icon: '🏅' },
-  { id: 'drivers_license', label: "Driver's Licence",     icon: '🚗' },
-  { id: 'id_card',        label: 'Government ID',         icon: '🪪' },
-];
 
 export function ProfileScreen() {
   const { user, signOut } = useAuth();
@@ -92,7 +84,7 @@ export function ProfileScreen() {
 
   const [photoUri,  setPhotoUri]  = useState<string | null>(null);
   const [profile,   setProfile]   = useState<UserProfile | null>(null);
-  const [documents, setDocuments] = useState<StoredDocument[]>([]);
+  const [docCount,  setDocCount]  = useState(0);
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
   const isCustomer = user?.role === 'CUSTOMER';
@@ -101,8 +93,19 @@ export function ProfileScreen() {
   useEffect(() => {
     Storage.getPhotoUri().then(uri => { if (uri) setPhotoUri(uri); });
     apiGetProfile().then(res => setProfile(res.user)).catch(() => {});
-    Storage.getDocuments().then(setDocuments);
+    Storage.getDocuments().then(d => setDocCount(d.length));
   }, []);
+
+  async function savePhoto(asset: ImagePicker.ImagePickerAsset) {
+    const uri = asset.uri;
+    setPhotoUri(uri);
+    await Storage.savePhotoUri(uri);
+    // Upload to server for PSWs (as base64 data URL)
+    if (isPSW && asset.base64) {
+      const dataUrl = `data:image/jpeg;base64,${asset.base64}`;
+      apiUpdateProfile({ photoUrl: dataUrl }).catch(() => {});
+    }
+  }
 
   async function pickPhoto() {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -111,12 +114,8 @@ export function ProfileScreen() {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') { Alert.alert('Permission Needed', 'Please allow photo access in Settings.'); return; }
       }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.8 });
-      if (!result.canceled && result.assets[0]) {
-        const uri = result.assets[0].uri;
-        setPhotoUri(uri);
-        await Storage.savePhotoUri(uri);
-      }
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.7, base64: true });
+      if (!result.canceled && result.assets[0]) await savePhoto(result.assets[0]);
     } catch {}
   }
 
@@ -125,12 +124,8 @@ export function ProfileScreen() {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') { Alert.alert('Permission Needed', 'Please allow camera access in Settings.'); return; }
-      const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
-      if (!result.canceled && result.assets[0]) {
-        const uri = result.assets[0].uri;
-        setPhotoUri(uri);
-        await Storage.savePhotoUri(uri);
-      }
+      const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.7, base64: true });
+      if (!result.canceled && result.assets[0]) await savePhoto(result.assets[0]);
     } catch {}
   }
 
@@ -141,46 +136,6 @@ export function ProfileScreen() {
       { text: '🖼 Choose from Library', onPress: pickPhoto },
       { text: 'Cancel', style: 'cancel' },
     ]);
-  }
-
-  async function uploadDocument(docType: typeof DOC_TYPES[0]) {
-    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      if (Platform.OS !== 'web') {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') { Alert.alert('Permission Needed', 'Please allow photo access in Settings.'); return; }
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false, quality: 0.9,
-      });
-      if (!result.canceled && result.assets[0]) {
-        const doc: StoredDocument = {
-          id: docType.id,
-          label: docType.label,
-          uri: result.assets[0].uri,
-          uploadedAt: new Date().toISOString(),
-        };
-        await Storage.saveDocument(doc);
-        setDocuments(await Storage.getDocuments());
-        Alert.alert('Uploaded ✅', `${docType.label} saved. Our team will review it shortly.`);
-      }
-    } catch {}
-  }
-
-  function removeDocument(id: string, label: string) {
-    const doRemove = async () => {
-      await Storage.removeDocument(id);
-      setDocuments(await Storage.getDocuments());
-    };
-    if (Platform.OS === 'web') {
-      if (window.confirm(`Remove ${label}?`)) doRemove();
-    } else {
-      Alert.alert('Remove Document', `Remove ${label}?`, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: doRemove },
-      ]);
-    }
   }
 
   function handleSignOut() {
@@ -315,66 +270,29 @@ export function ProfileScreen() {
           </Section>
         )}
 
-        {/* ── PSW: Documents ─────────────────────────────────────────── */}
+        {/* ── PSW: Documents nav card ────────────────────────────────── */}
         {isPSW && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>My Documents</Text>
-            <View style={[styles.card, { gap: 0 }]}>
-              <Text style={styles.docNote}>
-                Upload your credentials for admin review. Tap any document to upload or replace.
-              </Text>
-              {DOC_TYPES.map((docType, idx) => {
-                const uploaded = documents.find(d => d.id === docType.id);
-                return (
-                  <View key={docType.id}>
-                    {idx > 0 && <Divider />}
-                    <View style={styles.docRow}>
-                      <View style={styles.docLeft}>
-                        <View style={[styles.docIconWrap, { backgroundColor: uploaded ? '#F0FDF4' : '#F9FAFB', borderColor: uploaded ? '#BBF7D0' : '#E5E7EB' }]}>
-                          <Text style={styles.docIcon}>{docType.icon}</Text>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.docLabel}>{docType.label}</Text>
-                          {uploaded ? (
-                            <Text style={styles.docDate}>
-                              Uploaded {new Date(uploaded.uploadedAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </Text>
-                          ) : (
-                            <Text style={styles.docMissing}>Not uploaded</Text>
-                          )}
-                        </View>
-                      </View>
-                      <View style={styles.docActions}>
-                        {uploaded && (
-                          <Pressable
-                            style={styles.docRemoveBtn}
-                            onPress={() => removeDocument(docType.id, docType.label)}
-                          >
-                            <Text style={styles.docRemoveText}>✕</Text>
-                          </Pressable>
-                        )}
-                        <Pressable
-                          style={[styles.docUploadBtn, uploaded ? styles.docUploadBtnDone : styles.docUploadBtnNew]}
-                          onPress={() => uploadDocument(docType)}
-                        >
-                          <Text style={[styles.docUploadText, uploaded ? styles.docUploadTextDone : styles.docUploadTextNew]}>
-                            {uploaded ? '↑ Replace' : '↑ Upload'}
-                          </Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                    {uploaded && (
-                      <View style={styles.docPreviewWrap}>
-                        <Image source={{ uri: uploaded.uri }} style={styles.docPreview} resizeMode="cover" />
-                        <View style={styles.docPreviewBadge}>
-                          <Text style={styles.docPreviewBadgeText}>✅ Saved</Text>
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
+            <Text style={styles.sectionTitle}>Documents</Text>
+            <Pressable
+              style={({ pressed }) => [styles.docsNavCard, pressed && { opacity: 0.85 }]}
+              onPress={() => nav.navigate('PSWDocuments')}
+            >
+              <View style={styles.docsNavLeft}>
+                <View style={styles.docsNavIconWrap}>
+                  <Text style={styles.docsNavIcon}>📄</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.docsNavTitle}>My Credential Documents</Text>
+                  <Text style={styles.docsNavSub}>
+                    {docCount > 0 ? `${docCount} document${docCount !== 1 ? 's' : ''} uploaded` : 'Upload police check, certificates & more'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.docsNavArrowWrap}>
+                <Text style={styles.docsNavArrow}>›</Text>
+              </View>
+            </Pressable>
           </View>
         )}
 
@@ -443,25 +361,18 @@ export function ProfileScreen() {
           </Section>
         )}
 
-        {/* ── Help ──────────────────────────────────────────────────── */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Help</Text>
-          <Pressable
-            style={({ pressed }) => [styles.helpCard, pressed && { opacity: 0.8 }]}
-            onPress={() => nav.navigate('Help')}
-          >
-            <LinearGradient colors={['#1a1a1a', '#2d2d2d']} style={styles.helpCardGrad}>
-              <View style={styles.helpCardLeft}>
-                <Text style={styles.helpCardIcon}>📖</Text>
-                <View>
-                  <Text style={styles.helpCardTitle}>Help & Documentation</Text>
-                  <Text style={styles.helpCardSub}>Platform guide · Booking help · PSW verification</Text>
-                </View>
-              </View>
-              <Text style={styles.helpCardArrow}>→</Text>
-            </LinearGradient>
-          </Pressable>
-        </View>
+        {/* ── Support ───────────────────────────────────────────────── */}
+        <Section title="Support">
+          <InfoRow
+            icon="✉️" label="Email Us" value="support@carenearby.ca"
+            valueColor="#007AFF"
+            onPress={() => Linking.openURL('mailto:support@carenearby.ca?subject=CareNearby Support')}
+          />
+          <Divider />
+          <InfoRow icon="⏰" label="Hours" value="Mon–Fri 9am–5pm ET" />
+          <Divider />
+          <InfoRow icon="🌐" label="Languages" value="English · Français" />
+        </Section>
 
         {/* ── App Info ──────────────────────────────────────────────── */}
         <Section title="App Info">
@@ -581,43 +492,27 @@ const styles = StyleSheet.create({
   checkCellStatus: { fontSize: 16 },
   checkCellLabel: { fontSize: 12, fontWeight: '600', color: '#666', textAlign: 'center' },
 
-  // Documents
-  docNote: { fontSize: 13, color: '#888', lineHeight: 18, marginBottom: 16 },
-  docRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 },
-  docLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  docIconWrap: {
-    width: 44, height: 44, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1,
+  // Documents nav card
+  docsNavCard: {
+    backgroundColor: '#fff', borderRadius: 18, padding: 16,
+    flexDirection: 'row', alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2,
+    borderWidth: 1.5, borderColor: '#E5E7EB',
   },
-  docIcon: { fontSize: 22 },
-  docLabel: { fontSize: 15, fontWeight: '600', color: '#000', marginBottom: 2 },
-  docDate: { fontSize: 12, color: '#16A34A', fontWeight: '500' },
-  docMissing: { fontSize: 12, color: '#9CA3AF' },
-  docActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  docRemoveBtn: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: '#FFF1F2', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: '#FECDD3',
+  docsNavLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
+  docsNavIconWrap: {
+    width: 48, height: 48, borderRadius: 14,
+    backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#BFDBFE',
   },
-  docRemoveText: { fontSize: 11, color: '#DC2626', fontWeight: '700' },
-  docUploadBtn: {
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 10, borderWidth: 1.5,
-    minWidth: 84, alignItems: 'center',
+  docsNavIcon: { fontSize: 24 },
+  docsNavTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 3 },
+  docsNavSub: { fontSize: 13, color: '#6B7280' },
+  docsNavArrowWrap: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center',
   },
-  docUploadBtnNew: { backgroundColor: '#EFF6FF', borderColor: '#93C5FD' },
-  docUploadBtnDone: { backgroundColor: '#F0FDF4', borderColor: '#86EFAC' },
-  docUploadText: { fontSize: 13, fontWeight: '700' },
-  docUploadTextNew: { color: '#1D4ED8' },
-  docUploadTextDone: { color: '#16A34A' },
-  docPreviewWrap: { marginTop: 10, marginBottom: 4, borderRadius: 12, overflow: 'hidden', position: 'relative' },
-  docPreview: { width: '100%', height: 120, backgroundColor: '#f5f5f5' },
-  docPreviewBadge: {
-    position: 'absolute', top: 8, right: 8,
-    backgroundColor: '#16A34A', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3,
-  },
-  docPreviewBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  docsNavArrow: { fontSize: 20, color: '#9CA3AF', fontWeight: '600' },
 
   // Earnings
   earningsCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
@@ -636,19 +531,6 @@ const styles = StyleSheet.create({
   trustIcon: { fontSize: 16 },
   trustLabel: { fontSize: 15, fontWeight: '600', color: '#000', marginBottom: 2 },
   trustDesc: { fontSize: 13, color: '#666' },
-
-  // Help card
-  helpCard: {
-    borderRadius: 18, overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 6,
-    marginTop: -2,
-  },
-  helpCardGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18 },
-  helpCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
-  helpCardIcon: { fontSize: 28 },
-  helpCardTitle: { fontSize: 16, fontWeight: '700', color: '#fff', marginBottom: 3 },
-  helpCardSub: { fontSize: 12, color: 'rgba(255,255,255,0.55)' },
-  helpCardArrow: { color: '#fff', fontSize: 20, fontWeight: '700' },
 
   // Sign out
   signOutBtn: {

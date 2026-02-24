@@ -1,18 +1,21 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
 import { Text } from 'react-native';
 import { BookingsListScreen } from '../screens/admin/BookingsListScreen';
 import { PSWListScreen } from '../screens/admin/PSWListScreen';
+import { AdminPSWDetailScreen } from '../screens/admin/AdminPSWDetailScreen';
 import { ProfileScreen } from '../screens/shared/ProfileScreen';
 import { Colors } from '../utils/colors';
 
-const Tab = createBottomTabNavigator();
+const Tab   = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
 
 function tabIcon(emoji: string, focused: boolean) {
   return <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>{emoji}</Text>;
 }
 
-export function AdminNavigator() {
+function AdminTabs() {
   return (
     <Tab.Navigator
       screenOptions={{
@@ -51,5 +54,19 @@ export function AdminNavigator() {
         }}
       />
     </Tab.Navigator>
+  );
+}
+
+export function AdminNavigator() {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: 'slide_from_right',
+      }}
+    >
+      <Stack.Screen name="AdminHome" component={AdminTabs} />
+      <Stack.Screen name="PSWDetail" component={AdminPSWDetailScreen} />
+    </Stack.Navigator>
   );
 }

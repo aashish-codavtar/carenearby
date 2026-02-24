@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Platform,
@@ -14,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
+import { apiUploadDocument } from '../../api/client';
 import { Storage, StoredDocument } from '../../utils/storage';
 import { Colors } from '../../utils/colors';
 
@@ -25,36 +27,36 @@ const DOC_TYPES: {
   icon: string;
   required: boolean;
 }[] = [
-  { id: 'police_check',    label: 'Police Check Clearance',   sublabel: 'RCMP/OPP criminal record check — required', icon: '🛡️', required: true },
-  { id: 'psw_certificate', label: 'PSW Certificate',          sublabel: 'Official credential from your college',       icon: '🏅', required: true },
+  { id: 'police_check',    label: 'Police Check Clearance',      sublabel: 'RCMP/OPP criminal record check — required', icon: '🛡️', required: true },
+  { id: 'psw_certificate', label: 'PSW Certificate',             sublabel: 'Official credential from your college',      icon: '🏅', required: true },
   { id: 'first_aid',       label: 'First Aid / CPR Certificate', sublabel: 'Valid St. John Ambulance or Red Cross cert', icon: '🚑', required: true },
-  { id: 'drivers_license', label: "Driver's Licence",         sublabel: 'Ontario G or G2 — both sides',               icon: '🚗', required: false },
-  { id: 'id_card',         label: 'Government ID',            sublabel: 'Passport, Ontario Photo Card, or health card', icon: '🪪', required: false },
-  { id: 'insurance',       label: 'Liability Insurance',      sublabel: 'Professional liability / E&O if applicable',  icon: '📄', required: false },
+  { id: 'drivers_license', label: "Driver's Licence",            sublabel: 'Ontario G or G2 — both sides',              icon: '🚗', required: false },
+  { id: 'id_card',         label: 'Government ID',               sublabel: 'Passport, Ontario Photo Card, or health card', icon: '🪪', required: false },
+  { id: 'insurance',       label: 'Liability Insurance',         sublabel: 'Professional liability / E&O if applicable', icon: '📄', required: false },
 ];
 
 export function PSWDocumentsScreen() {
   const insets   = useSafeAreaInsets();
   const nav      = useNavigation<any>();
-  const [docs, setDocs] = useState<StoredDocument[]>([]);
-  const [submitted, setSubmitted] = useState(false);
-  const [uploading, setUploading] = useState<string | null>(null);
+  const [docs,       setDocs]       = useState<StoredDocument[]>([]);
+  const [submitted,  setSubmitted]  = useState(false);
+  const [uploading,  setUploading]  = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    Storage.getDocuments().then(setDocs);
-    // Check if already submitted
     Storage.getDocuments().then(d => {
+      setDocs(d);
       const required = DOC_TYPES.filter(t => t.required);
       const allRequired = required.every(t => d.find(u => u.id === t.id));
       if (allRequired && d.some(dd => (dd as any).submitted)) setSubmitted(true);
     });
   }, []);
 
-  const uploadedCount    = docs.length;
-  const requiredDone     = DOC_TYPES.filter(t => t.required && docs.find(d => d.id === t.id)).length;
-  const requiredTotal    = DOC_TYPES.filter(t => t.required).length;
-  const canSubmit        = requiredDone === requiredTotal;
-  const progressPct      = Math.round((requiredDone / requiredTotal) * 100);
+  const uploadedCount = docs.length;
+  const requiredDone  = DOC_TYPES.filter(t => t.required && docs.find(d => d.id === t.id)).length;
+  const requiredTotal = DOC_TYPES.filter(t => t.required).length;
+  const canSubmit     = requiredDone === requiredTotal;
+  const progressPct   = Math.round((requiredDone / requiredTotal) * 100);
 
   async function uploadDoc(docType: typeof DOC_TYPES[0]) {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -73,16 +75,24 @@ export function PSWDocumentsScreen() {
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: false,
-          quality: 0.92,
+          quality: 0.6,
+          base64: true,   // get base64 so we can upload to server
         });
         if (!result.canceled && result.assets[0]) {
-          const doc: StoredDocument = {
-            id: docType.id,
-            label: docType.label,
-            uri: result.assets[0].uri,
+          const asset = result.assets[0];
+          // Build data URL: on web the uri may already be blob:// so we use base64
+          const dataUrl = asset.base64
+            ? `data:image/jpeg;base64,${asset.base64}`
+            : asset.uri;   // fallback (web sometimes returns data URL directly)
+
+          const doc: StoredDocument & { dataUrl?: string } = {
+            id:         docType.id,
+            label:      docType.label,
+            uri:        asset.uri,
             uploadedAt: new Date().toISOString(),
+            dataUrl,
           };
-          await Storage.saveDocument(doc);
+          await Storage.saveDocument(doc as StoredDocument);
           const updated = await Storage.getDocuments();
           setDocs(updated);
           if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -122,15 +132,38 @@ export function PSWDocumentsScreen() {
   }
 
   async function submitDocuments() {
-    if (!canSubmit) return;
+    if (!canSubmit || submitting) return;
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     const doSubmit = async () => {
-      // Mark each doc as submitted
+      setSubmitting(true);
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const doc of docs) {
+        try {
+          const dataUrl = (doc as any).dataUrl || doc.uri;
+          await apiUploadDocument({ docType: doc.id, label: doc.label, dataUrl });
+          successCount++;
+        } catch {
+          failCount++;
+        }
+      }
+
+      // Mark locally as submitted
       const updated = docs.map(d => ({ ...d, submitted: true }));
       for (const d of updated) await Storage.saveDocument(d as any);
+
       setSubmitted(true);
+      setSubmitting(false);
+
       if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      if (failCount > 0) {
+        const msg = `${successCount} documents sent, ${failCount} failed. Please try again.`;
+        if (Platform.OS === 'web') alert(msg);
+        else Alert.alert('Partial Upload', msg);
+      }
     };
 
     if (Platform.OS === 'web') {
@@ -162,7 +195,7 @@ export function PSWDocumentsScreen() {
 
         <View style={styles.headerBody}>
           <Text style={styles.headerTitle}>My Documents</Text>
-          <Text style={styles.headerSub}>Upload your credentials for admin verification</Text>
+          <Text style={styles.headerSub}>Upload credentials for admin verification</Text>
         </View>
 
         {/* Progress bar */}
@@ -181,7 +214,7 @@ export function PSWDocumentsScreen() {
           <View style={styles.submittedBanner}>
             <Text style={styles.submittedBannerIcon}>✅</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.submittedBannerTitle}>Documents Submitted</Text>
+              <Text style={styles.submittedBannerTitle}>Documents Submitted to Admin</Text>
               <Text style={styles.submittedBannerSub}>Our team will review within 1–2 business days</Text>
             </View>
           </View>
@@ -205,14 +238,14 @@ export function PSWDocumentsScreen() {
           <View style={{ flex: 1 }}>
             <Text style={styles.infoCardTitle}>How it works</Text>
             <Text style={styles.infoCardText}>
-              Upload clear photos of each document. Required documents (marked ✱) must be submitted before you can accept jobs. Documents are reviewed by our team and kept private.
+              Upload clear photos of each document. Required docs (marked ✱) must be submitted before accepting jobs. Documents are sent securely to our admin team.
             </Text>
           </View>
         </View>
 
         {/* ── Document list ──────────────────────────────────────────── */}
         {DOC_TYPES.map(docType => {
-          const uploaded = docs.find(d => d.id === docType.id);
+          const uploaded  = docs.find(d => d.id === docType.id);
           const isLoading = uploading === docType.id;
 
           return (
@@ -240,10 +273,10 @@ export function PSWDocumentsScreen() {
                 </View>
               </View>
 
-              {/* Document preview (if uploaded) */}
+              {/* Document preview */}
               {uploaded && (
                 <View style={styles.docPreviewWrap}>
-                  <Image source={{ uri: uploaded.uri }} style={styles.docPreview} resizeMode="cover" />
+                  <Image source={{ uri: (uploaded as any).dataUrl || uploaded.uri }} style={styles.docPreview} resizeMode="cover" />
                   <View style={styles.docPreviewOverlay}>
                     <View style={styles.docPreviewBadge}>
                       <Text style={styles.docPreviewBadgeText}>✅ Saved</Text>
@@ -286,21 +319,28 @@ export function PSWDocumentsScreen() {
           {!submitted ? (
             <>
               <Pressable
-                style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
+                style={[styles.submitBtn, (!canSubmit || submitting) && styles.submitBtnDisabled]}
                 onPress={submitDocuments}
-                disabled={!canSubmit}
+                disabled={!canSubmit || submitting}
               >
                 <LinearGradient
-                  colors={canSubmit ? ['#059669', '#047857'] : ['#D1D5DB', '#9CA3AF']}
+                  colors={canSubmit && !submitting ? ['#059669', '#047857'] : ['#D1D5DB', '#9CA3AF']}
                   style={styles.submitBtnGrad}
                 >
-                  <Text style={styles.submitBtnText}>
-                    {canSubmit ? '📤  Submit Documents for Review' : `Upload required docs first (${requiredDone}/${requiredTotal})`}
-                  </Text>
+                  {submitting ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <ActivityIndicator color="#fff" size="small" />
+                      <Text style={styles.submitBtnText}>Uploading to server…</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.submitBtnText}>
+                      {canSubmit ? '📤  Submit Documents for Review' : `Upload required docs first (${requiredDone}/${requiredTotal})`}
+                    </Text>
+                  )}
                 </LinearGradient>
               </Pressable>
               <Text style={styles.submitDisclaimer}>
-                Your documents are stored securely and only reviewed by the CareNearby admin team.
+                Your documents are uploaded securely to the CareNearby admin team.
                 You will be notified when your account is approved.
               </Text>
             </>
@@ -309,7 +349,7 @@ export function PSWDocumentsScreen() {
               <Text style={styles.doneCardIcon}>🎉</Text>
               <Text style={styles.doneCardTitle}>Documents Submitted Successfully</Text>
               <Text style={styles.doneCardSub}>
-                Our team will review your credentials within 1–2 business days. You'll be able to accept jobs once approved. You can still add or replace documents while waiting.
+                Our team will review your credentials within 1–2 business days. You'll be able to accept jobs once approved. You can still add or replace documents.
               </Text>
               <Pressable
                 style={styles.resubmitBtn}
@@ -345,9 +385,7 @@ const styles = StyleSheet.create({
   progressRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   progressLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600' },
   progressCount: { color: '#fff', fontSize: 13, fontWeight: '800' },
-  progressTrack: {
-    height: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 3, overflow: 'hidden',
-  },
+  progressTrack: { height: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 3, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: '#34D399', borderRadius: 3 },
 
   // Banners
@@ -383,15 +421,11 @@ const styles = StyleSheet.create({
 
   // Document card
   docCard: {
-    backgroundColor: '#fff', borderRadius: 20,
-    padding: 18, gap: 14,
+    backgroundColor: '#fff', borderRadius: 20, padding: 18, gap: 14,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 3,
     borderWidth: 1.5, borderColor: '#E5E7EB',
   },
-  docCardUploaded: {
-    borderColor: '#A7F3D0',
-    shadowColor: '#059669', shadowOpacity: 0.1,
-  },
+  docCardUploaded: { borderColor: '#A7F3D0', shadowColor: '#059669', shadowOpacity: 0.1 },
   docCardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
   docIconWrap: {
     width: 52, height: 52, borderRadius: 16,
@@ -411,17 +445,11 @@ const styles = StyleSheet.create({
   docUploadedDate: { fontSize: 12, color: '#059669', fontWeight: '600' },
 
   // Preview
-  docPreviewWrap: {
-    borderRadius: 14, overflow: 'hidden', height: 160,
-    backgroundColor: '#F3F4F6', position: 'relative',
-  },
+  docPreviewWrap: { borderRadius: 14, overflow: 'hidden', height: 160, backgroundColor: '#F3F4F6', position: 'relative' },
   docPreview: { width: '100%', height: '100%' },
-  docPreviewOverlay: {
-    position: 'absolute', top: 10, right: 10,
-  },
+  docPreviewOverlay: { position: 'absolute', top: 10, right: 10 },
   docPreviewBadge: {
-    backgroundColor: '#059669', borderRadius: 10,
-    paddingHorizontal: 10, paddingVertical: 4,
+    backgroundColor: '#059669', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4,
   },
   docPreviewBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
@@ -429,16 +457,12 @@ const styles = StyleSheet.create({
   // Action buttons
   docCardActions: { flexDirection: 'row', gap: 10 },
   removeBtn: {
-    paddingHorizontal: 16, paddingVertical: 12,
-    borderRadius: 12, backgroundColor: '#FFF1F2',
-    borderWidth: 1, borderColor: '#FECDD3',
+    paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12,
+    backgroundColor: '#FFF1F2', borderWidth: 1, borderColor: '#FECDD3',
     alignItems: 'center', justifyContent: 'center',
   },
   removeBtnText: { fontSize: 13, fontWeight: '600', color: '#DC2626' },
-  uploadBtn: {
-    paddingHorizontal: 20, paddingVertical: 14,
-    borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-  },
+  uploadBtn: { paddingHorizontal: 20, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   uploadBtnNew: { backgroundColor: '#0D2042', flex: 1 },
   uploadBtnReplace: { backgroundColor: '#F0FDF4', borderWidth: 1.5, borderColor: '#86EFAC' },
   uploadBtnText: { fontSize: 15, fontWeight: '700' },
@@ -447,7 +471,10 @@ const styles = StyleSheet.create({
 
   // Submit section
   submitSection: { gap: 12 },
-  submitBtn: { borderRadius: 18, overflow: 'hidden', shadowColor: '#059669', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 14, elevation: 8 },
+  submitBtn: {
+    borderRadius: 18, overflow: 'hidden',
+    shadowColor: '#059669', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 14, elevation: 8,
+  },
   submitBtnDisabled: { shadowOpacity: 0 },
   submitBtnGrad: { paddingVertical: 20, paddingHorizontal: 24, alignItems: 'center' },
   submitBtnText: { color: '#fff', fontSize: 17, fontWeight: '800', textAlign: 'center' },
@@ -456,16 +483,14 @@ const styles = StyleSheet.create({
   // Done card
   doneCard: {
     backgroundColor: '#F0FDF4', borderRadius: 20, padding: 24,
-    alignItems: 'center', borderWidth: 1.5, borderColor: '#A7F3D0',
-    gap: 10,
+    alignItems: 'center', borderWidth: 1.5, borderColor: '#A7F3D0', gap: 10,
   },
   doneCardIcon: { fontSize: 44 },
   doneCardTitle: { fontSize: 18, fontWeight: '800', color: '#065F46', textAlign: 'center' },
   doneCardSub: { fontSize: 14, color: '#047857', textAlign: 'center', lineHeight: 21 },
   resubmitBtn: {
-    marginTop: 6, paddingHorizontal: 24, paddingVertical: 12,
-    borderRadius: 12, backgroundColor: '#fff',
-    borderWidth: 1.5, borderColor: '#059669',
+    marginTop: 6, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12,
+    backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#059669',
   },
   resubmitBtnText: { color: '#059669', fontSize: 14, fontWeight: '700' },
 

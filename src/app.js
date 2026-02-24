@@ -28,7 +28,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-app.use(express.json({ limit: '50kb' })); // Reject oversized payloads
+app.use(express.json({ limit: '15mb' })); // Allow base64 document uploads
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 // Tight limit on auth endpoints to prevent OTP brute-force
