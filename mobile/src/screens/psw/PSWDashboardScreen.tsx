@@ -300,6 +300,54 @@ export function PSWDashboardScreen() {
         ))}
       </View>
 
+      {/* ── Performance Card ──────────────────────────────────────── */}
+      {(() => {
+        const now = new Date();
+        const completedAll = jobs.filter(j => j.status === 'COMPLETED');
+        const thisMonthJobs = completedAll.filter(j => {
+          const d = new Date(j.scheduledAt);
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        });
+        const thisMonthEarned = thisMonthJobs.reduce((s, j) => s + j.totalPrice, 0);
+        const monthGoal = 2000;
+        const pct = Math.min(thisMonthEarned / monthGoal, 1);
+        const avgRating = profile?.rating ?? 0;
+        const ratingCount = profile?.ratingCount ?? 0;
+        const acceptanceRate = completedAll.length > 0
+          ? Math.round((completedAll.length / Math.max(completedAll.length, 1)) * 100)
+          : 0;
+
+        return (
+          <View style={styles.perfCard}>
+            <Text style={styles.perfCardTitle}>📊 Performance This Month</Text>
+            <View style={styles.perfMetrics}>
+              {([
+                [avgRating > 0 ? `⭐ ${avgRating.toFixed(1)}` : '⭐ —', `${ratingCount} reviews`, '#F59E0B'],
+                [`${thisMonthJobs.length}`, 'Jobs done', Colors.systemBlue],
+                [`$${thisMonthEarned}`, 'Earned', Colors.trustGreen],
+              ] as [string, string, string][]).map(([val, label, color]) => (
+                <View key={label} style={styles.perfMetric}>
+                  <Text style={[styles.perfMetricVal, { color }]}>{val}</Text>
+                  <Text style={styles.perfMetricLabel}>{label}</Text>
+                </View>
+              ))}
+            </View>
+            <View style={styles.perfGoalRow}>
+              <Text style={styles.perfGoalLabel}>Monthly goal: ${monthGoal.toLocaleString()}</Text>
+              <Text style={[styles.perfGoalPct, { color: pct >= 1 ? Colors.trustGreen : Colors.earningsGold }]}>
+                {Math.round(pct * 100)}%
+              </Text>
+            </View>
+            <View style={styles.perfProgressBg}>
+              <View style={[styles.perfProgressFill, { width: `${Math.round(pct * 100)}%` as any }]} />
+            </View>
+            <Text style={styles.perfGoalSub}>
+              {pct >= 1 ? '🎉 Goal reached!' : `$${monthGoal - thisMonthEarned} remaining · keep going!`}
+            </Text>
+          </View>
+        );
+      })()}
+
       {/* ── Recent Jobs ───────────────────────────────────────────── */}
       <View style={styles.sectionHeader}>
         <View>
@@ -431,6 +479,29 @@ const styles = StyleSheet.create({
   quickActionGrad: { padding: 18, alignItems: 'center', gap: 8 },
   quickActionIcon: { fontSize: 30 },
   quickActionLabel: { fontSize: 13, fontWeight: '800', letterSpacing: 0.1 },
+
+  // Performance card
+  perfCard: {
+    marginHorizontal: 16, marginTop: 4,
+    backgroundColor: Colors.systemBackground, borderRadius: 18, padding: 18,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
+    borderWidth: 1, borderColor: Colors.separator,
+  },
+  perfCardTitle: { fontSize: 14, fontWeight: '800', color: Colors.label, marginBottom: 14 },
+  perfMetrics: { flexDirection: 'row', marginBottom: 14 },
+  perfMetric: { flex: 1, alignItems: 'center', gap: 3 },
+  perfMetricVal: { fontSize: 18, fontWeight: '900' },
+  perfMetricLabel: { fontSize: 11, color: Colors.secondaryLabel, fontWeight: '600' },
+  perfGoalRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  perfGoalLabel: { fontSize: 12, color: Colors.secondaryLabel },
+  perfGoalPct: { fontSize: 14, fontWeight: '800' },
+  perfProgressBg: {
+    height: 7, backgroundColor: Colors.systemGray5, borderRadius: 4, overflow: 'hidden', marginBottom: 8,
+  },
+  perfProgressFill: {
+    height: '100%', backgroundColor: Colors.earningsGold, borderRadius: 4,
+  },
+  perfGoalSub: { fontSize: 12, color: Colors.tertiaryLabel },
 
   // Empty / pending states
   emptyState: { alignItems: 'center', paddingVertical: 40, paddingHorizontal: 24 },
