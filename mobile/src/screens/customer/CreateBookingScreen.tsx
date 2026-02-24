@@ -15,7 +15,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { apiCreateBooking } from '../../api/client';
-import { IOSButton } from '../../components/IOSButton';
 import { Colors, ServiceColors, ServiceIcons } from '../../utils/colors';
 
 const SUDBURY_CENTER = { lat: 46.4917, lng: -80.9924 };
@@ -30,6 +29,21 @@ const SERVICES = [
   'Post-Surgery Support',
 ];
 
+type CareType = 'on-demand' | 'scheduled' | 'home-care';
+type Frequency = 'weekly' | 'biweekly' | 'monthly';
+
+const CARE_TYPES: { id: CareType; label: string; icon: string; sub: string; color: string; bg: string }[] = [
+  { id: 'on-demand',  label: 'On Demand',  icon: '⚡', sub: 'Available today',  color: '#EA580C', bg: '#FFF7ED' },
+  { id: 'scheduled',  label: 'Scheduled',  icon: '📅', sub: 'Plan ahead',       color: '#007AFF', bg: '#EFF6FF' },
+  { id: 'home-care',  label: 'Home Care',  icon: '🏡', sub: 'Regular visits',   color: '#059669', bg: '#F0FDF4' },
+];
+
+const FREQUENCIES: { id: Frequency; label: string; sub: string }[] = [
+  { id: 'weekly',    label: 'Weekly',    sub: 'Every week' },
+  { id: 'biweekly',  label: 'Bi-weekly', sub: 'Every 2 weeks' },
+  { id: 'monthly',   label: 'Monthly',   sub: 'Once a month' },
+];
+
 const DEFAULT_COORDS: [number, number] = [-80.9924, 46.4917];
 const RATE = 25;
 const STEPS = ['Service', 'Schedule', 'Confirm'];
@@ -38,6 +52,12 @@ function tomorrow9am() {
   const d = new Date();
   d.setDate(d.getDate() + 1);
   d.setHours(9, 0, 0, 0);
+  return d;
+}
+
+function today2hours() {
+  const d = new Date();
+  d.setHours(d.getHours() + 2, 0, 0, 0);
   return d;
 }
 
@@ -52,24 +72,37 @@ function formatTimeDisplay(d: Date) {
 export function CreateBookingScreen() {
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
+  const [careType, setCareType] = useState<CareType>('scheduled');
   const [service, setService] = useState(SERVICES[0]);
   const [hours, setHours] = useState(3);
   const [date, setDate] = useState(tomorrow9am());
+  const [frequency, setFrequency] = useState<Frequency>('weekly');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
   const total = hours * RATE;
+  const activeType = CARE_TYPES.find(c => c.id === careType)!;
+
+  function haptic() {
+    if (Platform.OS !== 'web') Haptics.selectionAsync();
+  }
 
   async function submit() {
     setLoading(true);
+    const scheduledAt = careType === 'on-demand' ? today2hours() : date;
+    const extraParts = [
+      careType !== 'scheduled' ? `[${activeType.label}]` : '',
+      careType === 'home-care' ? `Frequency: ${FREQUENCIES.find(f => f.id === frequency)?.label}` : '',
+      notes.trim(),
+    ].filter(Boolean);
     try {
       await apiCreateBooking({
         serviceType: service,
         hours,
-        scheduledAt: date.toISOString(),
+        scheduledAt: scheduledAt.toISOString(),
         location: { coordinates: DEFAULT_COORDS },
-        notes: notes.trim() || undefined,
+        notes: extraParts.join(' · ') || undefined,
       });
       if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setSuccess(true);
@@ -79,23 +112,48 @@ export function CreateBookingScreen() {
     setLoading(false);
   }
 
+  function resetForm() {
+    setStep(0); setSuccess(false); setNotes('');
+    setHours(3); setDate(tomorrow9am()); setCareType('scheduled');
+  }
+
+  // ── Success screen ──────────────────────────────────────────────────────────
   if (success) {
+    const displayDate = careType === 'on-demand' ? today2hours() : date;
     return (
       <View style={[styles.successScreen, { paddingTop: insets.top + 40 }]}>
         <LinearGradient colors={['#F0FDF4', '#DCFCE7']} style={styles.successGrad}>
-          <Text style={styles.successIcon}>🎉</Text>
+          <View style={styles.successIconWrap}>
+            <Text style={styles.successIcon}>🎉</Text>
+          </View>
           <Text style={styles.successTitle}>Booking Requested!</Text>
           <Text style={styles.successSub}>
             We're finding the best available PSW for your {service.toLowerCase()} needs.
           </Text>
-          <View style={styles.successDetail}>
-            <Text style={styles.successDetailRow}>📅 {formatDateDisplay(date)}</Text>
-            <Text style={styles.successDetailRow}>⏰ {formatTimeDisplay(date)}</Text>
-            <Text style={styles.successDetailRow}>⏱ {hours} hours · ${total}</Text>
+
+          <View style={[styles.successTypeBadge, { backgroundColor: activeType.bg, borderColor: activeType.color + '40' }]}>
+            <Text style={styles.successTypeBadgeText}>{activeType.icon} {activeType.label}</Text>
           </View>
+
+          <View style={styles.successDetail}>
+            <Text style={styles.successDetailRow}>📋 {service}</Text>
+            {careType === 'on-demand' ? (
+              <Text style={styles.successDetailRow}>⚡ Today, ASAP · ETA 2–4 hours</Text>
+            ) : (
+              <>
+                <Text style={styles.successDetailRow}>📅 {formatDateDisplay(displayDate)}</Text>
+                <Text style={styles.successDetailRow}>⏰ {formatTimeDisplay(displayDate)}</Text>
+              </>
+            )}
+            <Text style={styles.successDetailRow}>⏱ {hours} hours · ${total}</Text>
+            {careType === 'home-care' && (
+              <Text style={styles.successDetailRow}>🔄 {FREQUENCIES.find(f => f.id === frequency)?.label}</Text>
+            )}
+          </View>
+
           <Pressable
             style={({ pressed }) => [styles.bookAnotherBtn, pressed && styles.bookAnotherBtnPressed]}
-            onPress={() => { setStep(0); setSuccess(false); setNotes(''); setHours(3); setDate(tomorrow9am()); }}
+            onPress={resetForm}
           >
             <Text style={styles.bookAnotherBtnText}>Book Another</Text>
           </Pressable>
@@ -104,6 +162,7 @@ export function CreateBookingScreen() {
     );
   }
 
+  // ── Main form ───────────────────────────────────────────────────────────────
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
@@ -112,7 +171,7 @@ export function CreateBookingScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* ── Header ── */}
         <LinearGradient
           colors={[Colors.heroNavy, Colors.heroNavyLight]}
           style={[styles.header, { paddingTop: insets.top + 20 }]}
@@ -120,7 +179,6 @@ export function CreateBookingScreen() {
           <Text style={styles.headerTitle}>Book a PSW</Text>
           <Text style={styles.headerSub}>Greater Sudbury · $25/hr · 3hr minimum</Text>
 
-          {/* Step indicator */}
           <View style={styles.stepRow}>
             {STEPS.map((s, i) => (
               <View key={s} style={styles.stepItem}>
@@ -138,10 +196,37 @@ export function CreateBookingScreen() {
           </View>
         </LinearGradient>
 
-        {/* Step 0: Service Selection */}
+        {/* ── Step 0: Service + Care Type ── */}
         {step === 0 && (
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>What care do you need?</Text>
+
+            <Text style={styles.subSectionLabel}>CARE TYPE</Text>
+            <View style={styles.careTypeRow}>
+              {CARE_TYPES.map(ct => {
+                const active = careType === ct.id;
+                return (
+                  <Pressable
+                    key={ct.id}
+                    style={({ pressed }) => [
+                      styles.careTypeCard,
+                      active && { borderColor: ct.color, backgroundColor: ct.bg },
+                      pressed && { opacity: 0.88 },
+                    ]}
+                    onPress={() => { haptic(); setCareType(ct.id); }}
+                  >
+                    <Text style={styles.careTypeIcon}>{ct.icon}</Text>
+                    <Text style={[styles.careTypeLabel, active && { color: ct.color }]}>{ct.label}</Text>
+                    <Text style={styles.careTypeSub}>{ct.sub}</Text>
+                    {active && (
+                      <View style={[styles.careTypeCheckDot, { backgroundColor: ct.color }]} />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.subSectionLabel, { marginTop: 20 }]}>SERVICE</Text>
             <View style={styles.serviceGrid}>
               {SERVICES.map(s => {
                 const selected = s === service;
@@ -151,10 +236,7 @@ export function CreateBookingScreen() {
                   <Pressable
                     key={s}
                     style={[styles.serviceOption, selected && styles.serviceOptionSelected]}
-                    onPress={() => {
-                      if (Platform.OS !== 'web') Haptics.selectionAsync();
-                      setService(s);
-                    }}
+                    onPress={() => { haptic(); setService(s); }}
                   >
                     <View style={[styles.serviceOptIcon, { backgroundColor: selected ? Colors.systemBlue + '20' : bg }]}>
                       <Text style={styles.serviceOptEmoji}>{icon}</Text>
@@ -171,58 +253,100 @@ export function CreateBookingScreen() {
                 );
               })}
             </View>
-            <Pressable style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]} onPress={() => setStep(1)}>
+
+            <Pressable
+              style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]}
+              onPress={() => setStep(1)}
+            >
               <Text style={styles.primaryBtnText}>Next: Schedule</Text>
               <View style={styles.primaryBtnArrow}><Text style={styles.primaryBtnArrowText}>→</Text></View>
             </Pressable>
           </View>
         )}
 
-        {/* Step 1: Schedule */}
+        {/* ── Step 1: Schedule ── */}
         {step === 1 && (
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>When do you need care?</Text>
 
-            {/* Date */}
-            <View style={styles.scheduleCard}>
-              <Text style={styles.scheduleLabel}>📅  Date</Text>
-              <Pressable
-                onPress={() => {
-                  const next = new Date(date);
-                  next.setDate(next.getDate() + 1);
-                  setDate(next);
-                }}
-                style={styles.scheduleValue}
-              >
-                <Text style={styles.scheduleValueText}>{formatDateDisplay(date)}</Text>
-                <Text style={styles.scheduleHint}>Tap to advance date →</Text>
-              </Pressable>
-            </View>
-
-            {/* Time */}
-            <View style={styles.scheduleCard}>
-              <Text style={styles.scheduleLabel}>⏰  Start Time</Text>
-              <View style={styles.timeRow}>
-                {[7, 9, 11, 13, 15, 17].map(h => {
-                  const active = date.getHours() === h;
-                  const label = h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
-                  return (
-                    <Pressable
-                      key={h}
-                      style={[styles.timeChip, active && styles.timeChipActive]}
-                      onPress={() => {
-                        if (Platform.OS !== 'web') Haptics.selectionAsync();
-                        const next = new Date(date);
-                        next.setHours(h, 0, 0, 0);
-                        setDate(next);
-                      }}
-                    >
-                      <Text style={[styles.timeChipText, active && styles.timeChipTextActive]}>{label}</Text>
-                    </Pressable>
-                  );
-                })}
+            {/* On Demand: ASAP banner */}
+            {careType === 'on-demand' && (
+              <View style={styles.onDemandBanner}>
+                <LinearGradient colors={['#FFF7ED', '#FEF3C7']} style={styles.onDemandGrad}>
+                  <View style={styles.onDemandIconWrap}>
+                    <Text style={styles.onDemandIcon}>⚡</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.onDemandTitle}>On Demand – Available Today</Text>
+                    <Text style={styles.onDemandSub}>A verified PSW will arrive within 2–4 hours of confirmation</Text>
+                  </View>
+                </LinearGradient>
               </View>
-            </View>
+            )}
+
+            {/* Home Care: Frequency */}
+            {careType === 'home-care' && (
+              <View style={styles.scheduleCard}>
+                <Text style={styles.scheduleLabel}>🔄  Visit Frequency</Text>
+                <View style={styles.frequencyRow}>
+                  {FREQUENCIES.map(f => (
+                    <Pressable
+                      key={f.id}
+                      style={[styles.freqChip, frequency === f.id && styles.freqChipActive]}
+                      onPress={() => { haptic(); setFrequency(f.id); }}
+                    >
+                      <Text style={[styles.freqChipLabel, frequency === f.id && styles.freqChipLabelActive]}>{f.label}</Text>
+                      <Text style={[styles.freqChipSub, frequency === f.id && styles.freqChipSubActive]}>{f.sub}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Date – hidden for on-demand */}
+            {careType !== 'on-demand' && (
+              <View style={styles.scheduleCard}>
+                <Text style={styles.scheduleLabel}>📅  Date</Text>
+                <Pressable
+                  onPress={() => {
+                    const next = new Date(date);
+                    next.setDate(next.getDate() + 1);
+                    setDate(next);
+                  }}
+                  style={styles.scheduleValue}
+                >
+                  <Text style={styles.scheduleValueText}>{formatDateDisplay(date)}</Text>
+                  <Text style={styles.scheduleHint}>Tap to advance date →</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {/* Time – hidden for on-demand */}
+            {careType !== 'on-demand' && (
+              <View style={styles.scheduleCard}>
+                <Text style={styles.scheduleLabel}>⏰  Start Time</Text>
+                <View style={styles.timeRow}>
+                  {[7, 9, 11, 13, 15, 17].map(h => {
+                    const active = date.getHours() === h;
+                    const label = h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
+                    return (
+                      <Pressable
+                        key={h}
+                        style={[styles.timeChip, active && styles.timeChipActive]}
+                        onPress={() => {
+                          haptic();
+                          const next = new Date(date);
+                          next.setHours(h, 0, 0, 0);
+                          setDate(next);
+                        }}
+                      >
+                        <Text style={[styles.timeChipText, active && styles.timeChipTextActive]}>{label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
 
             {/* Duration */}
             <View style={styles.scheduleCard}>
@@ -270,7 +394,10 @@ export function CreateBookingScreen() {
               <Pressable style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]} onPress={() => setStep(0)}>
                 <Text style={styles.backBtnText}>← Back</Text>
               </Pressable>
-              <Pressable style={({ pressed }) => [styles.primaryBtn, { flex: 2 }, pressed && styles.primaryBtnPressed]} onPress={() => setStep(2)}>
+              <Pressable
+                style={({ pressed }) => [styles.primaryBtn, { flex: 2 }, pressed && styles.primaryBtnPressed]}
+                onPress={() => setStep(2)}
+              >
                 <Text style={styles.primaryBtnText}>Review</Text>
                 <View style={styles.primaryBtnArrow}><Text style={styles.primaryBtnArrowText}>→</Text></View>
               </Pressable>
@@ -278,48 +405,83 @@ export function CreateBookingScreen() {
           </View>
         )}
 
-        {/* Step 2: Confirm */}
+        {/* ── Step 2: Confirm ── */}
         {step === 2 && (
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Review your booking</Text>
 
+            {/* Care type banner */}
+            <View style={[styles.careTypeSummaryBanner, { backgroundColor: activeType.bg, borderColor: activeType.color + '44' }]}>
+              <View style={[styles.careTypeSummaryIconWrap, { backgroundColor: activeType.color + '18' }]}>
+                <Text style={styles.careTypeSummaryIcon}>{activeType.icon}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.careTypeSummaryLabel, { color: activeType.color }]}>{activeType.label}</Text>
+                <Text style={styles.careTypeSummarySub}>{activeType.sub}</Text>
+              </View>
+            </View>
+
             <View style={styles.confirmCard}>
               <View style={styles.confirmRow}>
-                <Text style={styles.confirmIcon}>{ServiceIcons[service] ?? '🏥'}</Text>
+                <View style={styles.confirmServiceIconWrap}>
+                  <Text style={styles.confirmIcon}>{ServiceIcons[service] ?? '🏥'}</Text>
+                </View>
                 <Text style={styles.confirmService}>{service}</Text>
               </View>
               <View style={styles.confirmDivider} />
-              {[
-                ['📅 Date', formatDateDisplay(date)],
-                ['⏰ Time', formatTimeDisplay(date)],
+              {(careType !== 'on-demand' ? [
+                ['📅 Date',     formatDateDisplay(date)],
+                ['⏰ Time',     formatTimeDisplay(date)],
                 ['⏱ Duration', `${hours} hours`],
-              ].map(([label, value]) => (
+              ] : [
+                ['⚡ When',     'Today, ASAP'],
+                ['⏱ Duration', `${hours} hours`],
+                ['🕐 ETA',     '2–4 hours'],
+              ]).map(([label, value]) => (
                 <View key={label} style={styles.confirmDetail}>
                   <Text style={styles.confirmDetailLabel}>{label}</Text>
                   <Text style={styles.confirmDetailValue}>{value}</Text>
                 </View>
               ))}
+              {careType === 'home-care' && (
+                <View style={styles.confirmDetail}>
+                  <Text style={styles.confirmDetailLabel}>🔄 Frequency</Text>
+                  <Text style={styles.confirmDetailValue}>{FREQUENCIES.find(f => f.id === frequency)?.label}</Text>
+                </View>
+              )}
             </View>
 
-            {/* Map Location Card */}
-            <Pressable style={styles.mapCard} onPress={() => Linking.openURL(`https://www.google.com/maps?q=${SUDBURY_CENTER.lat},${SUDBURY_CENTER.lng}`)}>
-              <View style={styles.mapPreview}>
-                <View style={styles.mapOverlay}>
-                  <Text style={styles.mapText}>📍 Greater Sudbury, ON</Text>
-                  <Text style={styles.mapSubtext}>Tap to view on map</Text>
+            {/* Map */}
+            <View style={styles.mapCard}>
+              {Platform.OS === 'web' ? (
+                // @ts-ignore – iframe valid on web
+                <iframe
+                  src="https://www.openstreetmap.org/export/embed.html?bbox=-81.15,46.42,-80.83,46.57&layer=mapnik"
+                  style={{ width: '100%', height: 170, border: 'none', display: 'block', borderRadius: '18px 18px 0 0', pointerEvents: 'none' }}
+                  title="Service location – Greater Sudbury"
+                />
+              ) : (
+                <View style={styles.mapPreview}>
+                  <View style={styles.mapOverlay}>
+                    <Text style={styles.mapText}>📍 Greater Sudbury, ON</Text>
+                    <Text style={styles.mapSubtext}>Tap to view on map</Text>
+                  </View>
                 </View>
-              </View>
-              <View style={styles.mapInfo}>
+              )}
+              <Pressable
+                style={styles.mapInfo}
+                onPress={() => Linking.openURL(`https://www.google.com/maps?q=${SUDBURY_CENTER.lat},${SUDBURY_CENTER.lng}`)}
+              >
                 <View style={styles.mapInfoRow}>
                   <Text style={styles.mapInfoIcon}>📍</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.mapInfoTitle}>Service Location</Text>
-                    <Text style={styles.mapInfoSub}>Greater Sudbury, ON</Text>
+                    <Text style={styles.mapInfoSub}>Greater Sudbury, ON · 15 km radius</Text>
                   </View>
                   <Text style={styles.mapArrow}>→</Text>
                 </View>
-              </View>
-            </Pressable>
+              </Pressable>
+            </View>
 
             {/* Payment Info */}
             <View style={styles.paymentCard}>
@@ -343,6 +505,12 @@ export function CreateBookingScreen() {
                 <Text style={styles.priceLabel}>$25/hr × {hours} hours</Text>
                 <Text style={styles.priceValue}>${total}</Text>
               </View>
+              {careType === 'home-care' && (
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Recurring ({FREQUENCIES.find(f => f.id === frequency)?.label})</Text>
+                  <Text style={[styles.priceValue, { color: '#059669' }]}>✓</Text>
+                </View>
+              )}
               <View style={styles.priceDivider} />
               <View style={styles.priceRow}>
                 <Text style={styles.priceTotalLabel}>Total</Text>
@@ -355,7 +523,11 @@ export function CreateBookingScreen() {
               <Pressable style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]} onPress={() => setStep(1)}>
                 <Text style={styles.backBtnText}>← Back</Text>
               </Pressable>
-              <Pressable style={({ pressed }) => [styles.confirmBtn, pressed && styles.confirmBtnPressed]} onPress={submit} disabled={loading}>
+              <Pressable
+                style={({ pressed }) => [styles.confirmBtn, pressed && styles.confirmBtnPressed]}
+                onPress={submit}
+                disabled={loading}
+              >
                 <Text style={styles.confirmBtnText}>{loading ? 'Confirming...' : 'Confirm Booking'}</Text>
               </Pressable>
             </View>
@@ -371,6 +543,7 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 28 },
   headerTitle: { color: '#fff', fontSize: 28, fontWeight: '800', marginBottom: 4 },
   headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 14, marginBottom: 24 },
+
   stepRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   stepItem: { flexDirection: 'row', alignItems: 'center' },
   stepDot: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
@@ -383,47 +556,31 @@ const styles = StyleSheet.create({
   stepLine: { width: 24, height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 4 },
   stepLineActive: { backgroundColor: 'rgba(255,255,255,0.6)' },
   stepContent: { padding: 20 },
-  stepTitle: { fontSize: 22, fontWeight: '800', color: Colors.label, marginBottom: 20 },
-  
-  primaryBtn: {
-    marginTop: 20,
-    backgroundColor: '#000',
-    borderRadius: 12,
-    paddingVertical: 18,
-    paddingHorizontal: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
+  stepTitle: { fontSize: 22, fontWeight: '800', color: Colors.label, marginBottom: 18 },
+
+  subSectionLabel: {
+    fontSize: 11, fontWeight: '700', color: Colors.secondaryLabel,
+    letterSpacing: 0.8, marginBottom: 10,
   },
-  primaryBtnPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
+
+  // ── Care type ──
+  careTypeRow: { flexDirection: 'row', gap: 10, marginBottom: 6 },
+  careTypeCard: {
+    flex: 1, borderRadius: 16, padding: 14, alignItems: 'center', gap: 4,
+    backgroundColor: '#fff', borderWidth: 2, borderColor: '#E5E7EB',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+    position: 'relative',
   },
-  primaryBtnText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
+  careTypeIcon: { fontSize: 22 },
+  careTypeLabel: { fontSize: 13, fontWeight: '700', color: Colors.label },
+  careTypeSub: { fontSize: 10, color: Colors.secondaryLabel, textAlign: 'center' },
+  careTypeCheckDot: {
+    position: 'absolute', top: 6, right: 6,
+    width: 10, height: 10, borderRadius: 5,
   },
-  primaryBtnArrow: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryBtnArrowText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  serviceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+
+  // ── Services ──
+  serviceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 4 },
   serviceOption: {
     width: '47%', backgroundColor: Colors.systemBackground, borderRadius: 16, padding: 14,
     borderWidth: 2, borderColor: 'transparent', gap: 8,
@@ -439,6 +596,34 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.systemBlue, alignItems: 'center', justifyContent: 'center',
   },
   selectedCheckText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+
+  // ── Primary button (blue, not black) ──
+  primaryBtn: {
+    marginTop: 20,
+    backgroundColor: Colors.systemBlue,
+    borderRadius: 14,
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    shadowColor: Colors.systemBlue,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  primaryBtnPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  primaryBtnText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  primaryBtnArrow: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  primaryBtnArrowText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+
+  // ── Schedule ──
   scheduleCard: {
     backgroundColor: Colors.systemBackground, borderRadius: 16, padding: 16, marginBottom: 12,
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
@@ -461,75 +646,88 @@ const styles = StyleSheet.create({
   durationUnit: { fontSize: 13, color: Colors.secondaryLabel },
   notesInput: { backgroundColor: Colors.systemGray6, borderRadius: 10, padding: 12, fontSize: 15, color: Colors.label, minHeight: 80, marginBottom: 4 },
   charCount: { fontSize: 11, color: Colors.tertiaryLabel, textAlign: 'right' },
+
+  // ── On demand ──
+  onDemandBanner: {
+    borderRadius: 16, overflow: 'hidden', marginBottom: 12,
+    shadowColor: '#EA580C', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 4,
+    borderWidth: 1.5, borderColor: '#FED7AA',
+  },
+  onDemandGrad: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 14 },
+  onDemandIconWrap: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' },
+  onDemandIcon: { fontSize: 22 },
+  onDemandTitle: { fontSize: 15, fontWeight: '700', color: '#92400E', marginBottom: 3 },
+  onDemandSub: { fontSize: 12, color: '#78350F', lineHeight: 18 },
+
+  // ── Frequency ──
+  frequencyRow: { flexDirection: 'row', gap: 10 },
+  freqChip: {
+    flex: 1, paddingVertical: 12, borderRadius: 14,
+    backgroundColor: Colors.systemGray6, borderWidth: 1.5, borderColor: 'transparent',
+    alignItems: 'center', gap: 2,
+  },
+  freqChipActive: { backgroundColor: '#F0FDF4', borderColor: '#059669' },
+  freqChipLabel: { fontSize: 13, fontWeight: '700', color: Colors.secondaryLabel },
+  freqChipLabelActive: { color: '#059669' },
+  freqChipSub: { fontSize: 10, color: Colors.tertiaryLabel },
+  freqChipSubActive: { color: '#059669' },
+
+  // ── Nav ──
   navBtns: { flexDirection: 'row', gap: 10, marginTop: 20 },
   backBtn: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#e5e5e5',
+    flex: 1, backgroundColor: '#fff', borderRadius: 14, paddingVertical: 16,
+    paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: '#E5E7EB',
   },
-  backBtnPressed: {
-    backgroundColor: '#f5f5f5',
-  },
-  backBtnText: {
-    color: '#666',
-    fontSize: 15,
-    fontWeight: '600',
-  },
+  backBtnPressed: { backgroundColor: '#f5f5f5' },
+  backBtnText: { color: '#666', fontSize: 15, fontWeight: '600' },
   confirmBtn: {
-    flex: 2,
-    backgroundColor: '#34C759',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#34C759',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    flex: 2, backgroundColor: '#34C759', borderRadius: 14, paddingVertical: 16,
+    paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#34C759', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
   },
-  confirmBtnPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
+  confirmBtnPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  confirmBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  // ── Care type summary banner (step 2) ──
+  careTypeSummaryBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    borderRadius: 16, padding: 16, marginBottom: 14,
+    borderWidth: 1.5,
   },
-  confirmBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  careTypeSummaryIconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  careTypeSummaryIcon: { fontSize: 22 },
+  careTypeSummaryLabel: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  careTypeSummarySub: { fontSize: 12, color: Colors.secondaryLabel },
+
+  // ── Confirm card ──
   confirmCard: {
     backgroundColor: Colors.systemBackground, borderRadius: 18, padding: 20, marginBottom: 14,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 10, elevation: 4,
   },
-  confirmRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
-  confirmIcon: { fontSize: 32 },
+  confirmRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
+  confirmServiceIconWrap: { width: 52, height: 52, borderRadius: 14, backgroundColor: Colors.systemGray6, alignItems: 'center', justifyContent: 'center' },
+  confirmIcon: { fontSize: 28 },
   confirmService: { fontSize: 20, fontWeight: '800', color: Colors.label, flex: 1 },
   confirmDivider: { height: 1, backgroundColor: Colors.separator, marginVertical: 14 },
   confirmDetail: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
   confirmDetailLabel: { fontSize: 14, color: Colors.secondaryLabel },
   confirmDetailValue: { fontSize: 14, fontWeight: '600', color: Colors.label },
-  confirmNotesLabel: { fontSize: 13, fontWeight: '700', color: Colors.secondaryLabel, marginBottom: 6 },
-  confirmNotes: { fontSize: 14, color: Colors.label, lineHeight: 20 },
-  
+
+  // ── Map ──
   mapCard: {
     backgroundColor: Colors.systemBackground, borderRadius: 18, overflow: 'hidden',
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 10, elevation: 4, marginBottom: 14,
   },
   mapPreview: {
-    height: 120, backgroundColor: '#E8F5E9',
+    height: 160, backgroundColor: '#D1FAE5',
     justifyContent: 'center', alignItems: 'center',
   },
   mapOverlay: {
-    backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.52)', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 22,
+    alignItems: 'center',
   },
-  mapText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  mapText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   mapSubtext: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 2 },
   mapInfo: { padding: 16 },
   mapInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -538,6 +736,7 @@ const styles = StyleSheet.create({
   mapInfoSub: { fontSize: 13, color: Colors.secondaryLabel },
   mapArrow: { fontSize: 18, color: Colors.systemBlue, fontWeight: '600' },
 
+  // ── Payment ──
   paymentCard: {
     backgroundColor: '#F0F7FF', borderRadius: 16, padding: 16, marginBottom: 14,
     borderWidth: 1, borderColor: '#007AFF20',
@@ -553,6 +752,7 @@ const styles = StyleSheet.create({
   notesLabel: { fontSize: 12, fontWeight: '700', color: Colors.secondaryLabel, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
   notesText: { fontSize: 14, color: Colors.label, lineHeight: 20 },
 
+  // ── Price ──
   priceCard: { backgroundColor: Colors.systemBackground, borderRadius: 18, padding: 20, marginBottom: 14 },
   priceTitle: { fontSize: 16, fontWeight: '800', color: Colors.label, marginBottom: 14 },
   priceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
@@ -562,29 +762,28 @@ const styles = StyleSheet.create({
   priceTotalLabel: { fontSize: 17, fontWeight: '800', color: Colors.label },
   priceTotalValue: { fontSize: 20, fontWeight: '900', color: Colors.systemBlue },
   priceNote: { fontSize: 12, color: Colors.tertiaryLabel, marginTop: 8 },
+
+  // ── Success ──
   successScreen: { flex: 1, backgroundColor: '#F0FDF4' },
   successGrad: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  successIcon: { fontSize: 64, marginBottom: 20 },
-  successTitle: { fontSize: 28, fontWeight: '900', color: Colors.trustGreen, marginBottom: 12 },
-  successSub: { fontSize: 16, color: Colors.secondaryLabel, textAlign: 'center', lineHeight: 24, marginBottom: 24 },
-  successDetail: { backgroundColor: '#fff', borderRadius: 16, padding: 20, width: '100%', gap: 10 },
+  successIconWrap: {
+    width: 96, height: 96, borderRadius: 48, backgroundColor: 'rgba(52,199,89,0.12)',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+  },
+  successIcon: { fontSize: 52 },
+  successTitle: { fontSize: 28, fontWeight: '900', color: Colors.trustGreen, marginBottom: 10 },
+  successSub: { fontSize: 15, color: Colors.secondaryLabel, textAlign: 'center', lineHeight: 22, marginBottom: 16 },
+  successTypeBadge: {
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+    borderWidth: 1.5, marginBottom: 16,
+  },
+  successTypeBadgeText: { fontSize: 14, fontWeight: '700' },
+  successDetail: { backgroundColor: '#fff', borderRadius: 18, padding: 20, width: '100%', gap: 12, marginBottom: 24 },
   successDetailRow: { fontSize: 15, color: Colors.label, fontWeight: '500' },
   bookAnotherBtn: {
-    marginTop: 24,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderWidth: 2,
-    borderColor: '#34C759',
+    backgroundColor: '#fff', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 32,
+    borderWidth: 2, borderColor: '#34C759',
   },
-  bookAnotherBtnPressed: {
-    backgroundColor: '#F0FDF4',
-  },
-  bookAnotherBtnText: {
-    color: '#34C759',
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
+  bookAnotherBtnPressed: { backgroundColor: '#F0FDF4' },
+  bookAnotherBtnText: { color: '#34C759', fontSize: 16, fontWeight: '700', textAlign: 'center' },
 });

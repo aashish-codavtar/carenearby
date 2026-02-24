@@ -28,6 +28,14 @@ const T = {
     nearbyTitle: 'Nearby PSWs',
     nearbySub: '15 PSWs available in your area',
     viewMap: '🗺 View map',
+    quickLabel: 'Quick',
+    quickTitle: 'How would you like care?',
+    onDemandTitle: 'On Demand',
+    onDemandSub: 'PSW in 2–4 hours',
+    scheduledTitle: 'Scheduled',
+    scheduledSub: 'Plan ahead',
+    homeCareTitle: 'Home Care',
+    homeCareSub: 'Regular visits',
     servicesLabel: 'Services',
     servicesTitle: 'What do you need?',
     recentLabel: 'Recent',
@@ -47,6 +55,14 @@ const T = {
     nearbyTitle: 'PAP à proximité',
     nearbySub: '15 PAP disponibles dans votre région',
     viewMap: '🗺 Voir la carte',
+    quickLabel: 'Rapide',
+    quickTitle: 'Comment souhaitez-vous des soins ?',
+    onDemandTitle: 'À la demande',
+    onDemandSub: 'PAP en 2–4 heures',
+    scheduledTitle: 'Planifié',
+    scheduledSub: 'Planifier à l\'avance',
+    homeCareTitle: 'Soins à domicile',
+    homeCareSub: 'Visites régulières',
     servicesLabel: 'Services',
     servicesTitle: 'De quoi avez-vous besoin ?',
     recentLabel: 'Récent',
@@ -142,16 +158,17 @@ export function HomeScreen() {
         }
       >
         <LinearGradient
-          colors={['#000000', '#1a1a1a', '#2d2d2d']}
+          colors={['#0A1628', '#0D2042', '#1565C0', '#1976D2']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
           style={[styles.hero, { paddingTop: insets.top + 16 }]}
         >
           <View style={styles.heroTop}>
             <View style={styles.locationBadge}>
               <Text style={styles.locationIcon}>📍</Text>
-              <Text style={styles.locationText}>Greater Sudbury, ON</Text>
+              <Text style={styles.locationText}>Greater Sudbury, ON 🇨🇦</Text>
             </View>
             <View style={styles.heroActions}>
-              {/* Language toggle */}
               <Pressable
                 style={({ pressed }) => [styles.langToggle, pressed && { opacity: 0.75 }]}
                 onPress={() => setLang(l => l === 'en' ? 'fr' : 'en')}
@@ -170,6 +187,7 @@ export function HomeScreen() {
 
           <Pressable style={styles.bookingCard} onPress={() => nav.navigate('NewBooking')}>
             <View style={styles.bookingCardLeft}>
+              <Text style={styles.bookingCardEyebrow}>AVAILABLE TODAY</Text>
               <Text style={styles.bookingCardTitle}>{t.bookNow}</Text>
               <Text style={styles.bookingCardSub}>{t.bookSub}</Text>
             </View>
@@ -219,13 +237,22 @@ export function HomeScreen() {
         </View>
 
         {/* Nearby PSWs */}
-        <Pressable style={styles.nearbyCard} onPress={() => nav.navigate('NewBooking')}>
-          <View style={styles.nearbyMapPreview}>
-            <View style={styles.nearbyMapOverlay}>
-              <Text style={styles.nearbyMapText}>{t.viewMap}</Text>
+        <View style={styles.nearbyCard}>
+          {Platform.OS === 'web' ? (
+            // @ts-ignore – iframe valid on web
+            <iframe
+              src="https://www.openstreetmap.org/export/embed.html?bbox=-81.15,46.42,-80.83,46.57&layer=mapnik"
+              style={{ width: '100%', height: 150, border: 'none', display: 'block', pointerEvents: 'none' }}
+              title="Nearby PSWs in Greater Sudbury"
+            />
+          ) : (
+            <View style={styles.nearbyMapPreview}>
+              <View style={styles.nearbyMapOverlay}>
+                <Text style={styles.nearbyMapText}>{t.viewMap}</Text>
+              </View>
             </View>
-          </View>
-          <View style={styles.nearbyInfo}>
+          )}
+          <Pressable style={styles.nearbyInfo} onPress={() => nav.navigate('NewBooking')}>
             <View style={styles.nearbyInfoLeft}>
               <Text style={styles.nearbyTitle}>{t.nearbyTitle}</Text>
               <Text style={styles.nearbySub}>{t.nearbySub}</Text>
@@ -233,8 +260,35 @@ export function HomeScreen() {
             <View style={styles.nearbyArrow}>
               <Text style={styles.nearbyArrowText}>→</Text>
             </View>
-          </View>
-        </Pressable>
+          </Pressable>
+        </View>
+
+        {/* Quick Book Row */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionLabel}>{t.quickLabel}</Text>
+          <Text style={styles.sectionTitle}>{t.quickTitle}</Text>
+        </View>
+        <View style={styles.quickRow}>
+          {([
+            { icon: '⚡', title: t.onDemandTitle, sub: t.onDemandSub, color: '#EA580C', bg: '#FFF7ED', border: '#FED7AA' },
+            { icon: '📅', title: t.scheduledTitle, sub: t.scheduledSub, color: '#007AFF', bg: '#EFF6FF', border: '#BFDBFE' },
+            { icon: '🏡', title: t.homeCareTitle, sub: t.homeCareSub, color: '#059669', bg: '#F0FDF4', border: '#A7F3D0' },
+          ] as const).map(item => (
+            <Pressable
+              key={item.title}
+              style={({ pressed }) => [
+                styles.quickCard,
+                { backgroundColor: item.bg, borderColor: item.border },
+                pressed && { opacity: 0.85, transform: [{ scale: 0.96 }] },
+              ]}
+              onPress={() => nav.navigate('NewBooking')}
+            >
+              <Text style={styles.quickCardIcon}>{item.icon}</Text>
+              <Text style={[styles.quickCardTitle, { color: item.color }]}>{item.title}</Text>
+              <Text style={styles.quickCardSub}>{item.sub}</Text>
+            </Pressable>
+          ))}
+        </View>
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionLabel}>{t.servicesLabel}</Text>
@@ -299,48 +353,51 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   scrollView: { flex: 1 },
 
-  hero: { paddingHorizontal: 20, paddingBottom: 24 },
+  hero: { paddingHorizontal: 20, paddingBottom: 28 },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   heroActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   locationBadge: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7,
+    gap: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
   },
-  locationIcon: { fontSize: 12 },
-  locationText: { color: '#fff', fontSize: 13, fontWeight: '500' },
+  locationIcon: { fontSize: 13 },
+  locationText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   langToggle: {
-    paddingHorizontal: 10, paddingVertical: 5,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 12, paddingVertical: 7,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)',
   },
-  langToggleText: { color: '#fff', fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  langToggleText: { color: '#fff', fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
   avatarBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: '#007AFF',
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)',
     alignItems: 'center', justifyContent: 'center',
   },
-  avatarBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  greetingSub: { color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 4 },
-  greetingMain: { color: 'rgba(255,255,255,0.8)', fontSize: 18, fontWeight: '500' },
-  greetingName: { color: '#fff', fontSize: 32, fontWeight: '800', marginBottom: 20, letterSpacing: -0.5 },
+  avatarBtnText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+  greetingSub: { color: 'rgba(255,255,255,0.55)', fontSize: 13, marginBottom: 6, fontWeight: '500' },
+  greetingMain: { color: 'rgba(255,255,255,0.85)', fontSize: 20, fontWeight: '500' },
+  greetingName: { color: '#fff', fontSize: 36, fontWeight: '900', marginBottom: 24, letterSpacing: -1 },
 
   bookingCard: {
-    backgroundColor: '#007AFF',
-    borderRadius: 16, padding: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20, padding: 20,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    shadowColor: '#007AFF', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 8,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 16, elevation: 8,
   },
   bookingCardLeft: { flex: 1 },
-  bookingCardTitle: { color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 4 },
-  bookingCardSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
+  bookingCardEyebrow: { color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: '700', letterSpacing: 1.2, marginBottom: 4 },
+  bookingCardTitle: { color: '#fff', fontSize: 20, fontWeight: '800', marginBottom: 4, letterSpacing: -0.3 },
+  bookingCardSub: { color: 'rgba(255,255,255,0.65)', fontSize: 13 },
   bookingCardArrow: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center',
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8,
   },
-  bookingCardArrowText: { color: '#fff', fontSize: 20, fontWeight: '700' },
+  bookingCardArrowText: { color: '#0D2042', fontSize: 22, fontWeight: '800' },
 
   activeBanner: {
     marginHorizontal: 16, marginTop: 16,
@@ -401,6 +458,16 @@ const styles = StyleSheet.create({
   serviceGridCardEmpty: { flex: 1 },
   serviceGridIcon: { fontSize: 28, marginBottom: 8 },
   serviceGridName: { fontSize: 12, fontWeight: '600', color: '#333', textAlign: 'center' },
+
+  quickRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 10, marginBottom: 4 },
+  quickCard: {
+    flex: 1, borderRadius: 16, padding: 14, alignItems: 'center', gap: 4,
+    borderWidth: 1.5,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+  },
+  quickCardIcon: { fontSize: 22, marginBottom: 2 },
+  quickCardTitle: { fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  quickCardSub: { fontSize: 10, color: '#888', textAlign: 'center' },
 
   emptyState: { alignItems: 'center', paddingVertical: 40, paddingHorizontal: 24 },
   emptyIconWrap: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#f5f5f5', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
