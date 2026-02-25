@@ -60,4 +60,11 @@ const pswProfileSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+pswProfileSchema.index({ userId: 1 }, { unique: true });
+pswProfileSchema.index({ approvedByAdmin: 1, availability: 1 });
+pswProfileSchema.index({ qualificationType: 1 });
+pswProfileSchema.index({ policeCheckCleared: 1 });
+pswProfileSchema.index({ experienceYears: -1 });
+pswProfileSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.model('PSWProfile', pswProfileSchema);

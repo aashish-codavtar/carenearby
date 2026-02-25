@@ -65,6 +65,13 @@ const bookingSchema = new mongoose.Schema(
 // Required for $geoNear queries in the PSW nearby-jobs endpoint
 bookingSchema.index({ location: '2dsphere' });
 
+bookingSchema.index({ customerId: 1, status: 1 });
+bookingSchema.index({ pswId: 1, status: 1 });
+bookingSchema.index({ status: 1, scheduledAt: 1 });
+bookingSchema.index({ paymentStatus: 1 });
+bookingSchema.index({ createdAt: -1 });
+bookingSchema.index({ scheduledAt: 1 });
+
 // ── Response transform ────────────────────────────────────────────────────────
 // Renames internal field names to the public API shape that the mobile app
 // expects: customerId → customer, pswId → psw, price → totalPrice.

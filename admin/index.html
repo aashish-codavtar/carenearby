@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CareNearby Admin</title>
+  <link rel="stylesheet" href="/admin/styles.css">
+</head>
+<body>
+  <div id="login-screen" class="screen">
+    <div class="login-box">
+      <div class="logo">🏥</div>
+      <h1>CareNearby Admin</h1>
+      <form id="login-form">
+        <input type="text" id="username" placeholder="Username" required>
+        <input type="password" id="password" placeholder="Password" required>
+        <button type="submit">Sign In</button>
+      </form>
+      <p id="login-error" class="error"></p>
+    </div>
+  </div>
+
+  <div id="admin-screen" class="screen hidden">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <span class="logo">🏥</span>
+        <span>CareNearby</span>
+      </div>
+      <nav>
+        <a href="#" data-page="dashboard" class="active">📊 Dashboard</a>
+        <a href="#" data-page="psws">👨‍⚕️ PSW Workers</a>
+        <a href="#" data-page="documents">📄 Documents</a>
+        <a href="#" data-page="bookings">📅 Bookings</a>
+        <a href="#" data-page="audit">📋 Audit Logs</a>
+      </nav>
+      <div class="sidebar-footer">
+        <span id="admin-name"></span>
+        <button id="logout-btn">Logout</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <!-- Dashboard -->
+      <div id="page-dashboard" class="page">
+        <h2>Dashboard</h2>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-value" id="stat-pending">0</span>
+            <span class="stat-label">Pending Documents</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="stat-psws">0</span>
+            <span class="stat-label">Total PSWs</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="stat-approved">0</span>
+            <span class="stat-label">Approved PSWs</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="stat-bookings">0</span>
+            <span class="stat-label">Total Bookings</span>
+          </div>
+        </div>
+        <div class="recent-section">
+          <h3>Recent Pending Documents</h3>
+          <div id="recent-docs" class="table-container"></div>
+        </div>
+      </div>
+
+      <!-- PSW Workers -->
+      <div id="page-psws" class="page hidden">
+        <div class="page-header">
+          <h2>PSW Workers</h2>
+          <div class="filters">
+            <select id="psw-filter">
+              <option value="">All</option>
+              <option value="true">Approved</option>
+              <option value="false">Pending</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-container">
+          <table id="psw-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Qualification</th>
+                <th>Experience</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Documents -->
+      <div id="page-documents" class="page hidden">
+        <div class="page-header">
+          <h2>Documents</h2>
+          <div class="filters">
+            <select id="doc-status-filter">
+              <option value="">All Status</option>
+              <option value="PENDING">Pending</option>
+              <option value="APPROVED">Approved</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
+            <select id="doc-type-filter">
+              <option value="">All Types</option>
+              <option value="police_check">Police Check</option>
+              <option value="psw_certificate">PSW Certificate</option>
+              <option value="first_aid_cert">First Aid</option>
+              <option value="driver_license">Driver License</option>
+              <option value="insurance">Insurance</option>
+              <option value="id_proof">ID Proof</option>
+              <option value="photo">Photo</option>
+              <option value="resume">Resume</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-container">
+          <table id="documents-table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Label</th>
+                <th>File</th>
+                <th>Status</th>
+                <th>Submitted</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Bookings -->
+      <div id="page-bookings" class="page hidden">
+        <div class="page-header">
+          <h2>Bookings</h2>
+          <div class="filters">
+            <select id="booking-status-filter">
+              <option value="">All Status</option>
+              <option value="REQUESTED">Requested</option>
+              <option value="ACCEPTED">Accepted</option>
+              <option value="STARTED">Started</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-container">
+          <table id="bookings-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Service</th>
+                <th>Customer</th>
+                <th>PSW</th>
+                <th>Status</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Audit Logs -->
+      <div id="page-audit" class="page hidden">
+        <h2>Audit Logs</h2>
+        <div class="table-container">
+          <table id="audit-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Admin</th>
+                <th>Action</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Document Review Modal -->
+  <div id="doc-modal" class="modal hidden">
+    <div class="modal-content">
+      <span class="modal-close">&times;</span>
+      <h3>Review Document</h3>
+      <div id="doc-modal-body"></div>
+      <div class="modal-actions">
+        <button id="approve-doc-btn" class="btn-approve">Approve</button>
+        <button id="reject-doc-btn" class="btn-reject">Reject</button>
+      </div>
+      <div id="reject-reason-container" class="hidden">
+        <textarea id="reject-reason" placeholder="Rejection reason (required)"></textarea>
+        <button id="confirm-reject-btn" class="btn-reject">Confirm Rejection</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PSW Detail Modal -->
+  <div id="psw-modal" class="modal hidden">
+    <div class="modal-content modal-large">
+      <span class="modal-close">&times;</span>
+      <h3>PSW Details</h3>
+      <div id="psw-modal-body"></div>
+    </div>
+  </div>
+
+  <script src="/admin/app.js"></script>
+</body>
+</html>

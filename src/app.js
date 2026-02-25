@@ -5,11 +5,14 @@ const mongoose    = require('mongoose');
 const cors        = require('cors');
 const helmet      = require('helmet');
 const rateLimit   = require('express-rate-limit');
+const path        = require('path');
 
-const authRoutes     = require('./routes/auth');
-const customerRoutes = require('./routes/customer');
-const pswRoutes      = require('./routes/psw');
-const adminRoutes    = require('./routes/admin');
+const authRoutes      = require('./routes/auth');
+const customerRoutes  = require('./routes/customer');
+const pswRoutes       = require('./routes/psw');
+const adminRoutes     = require('./routes/admin');
+const adminAuthRoutes = require('./routes/adminAuth');
+const documentRoutes  = require('./routes/documents');
 
 const app = express();
 
@@ -29,6 +32,10 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '15mb' })); // Allow base64 document uploads
+
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/admin', express.static(path.join(__dirname, '../admin')));
+app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, '../admin/index.html')));
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 // Tight limit on auth endpoints to prevent OTP brute-force
@@ -53,10 +60,12 @@ app.use('/auth', authLimiter);
 app.use('/',     apiLimiter);
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-app.use('/auth',   authRoutes);
-app.use('/jobs',   pswRoutes);        // PSW job actions (/jobs/nearby, /jobs/:id/*)
-app.use('/admin',  adminRoutes);      // Admin panel
-app.use('/',       customerRoutes);   // /bookings, /ratings
+app.use('/auth',      authRoutes);
+app.use('/jobs',      pswRoutes);          // PSW job actions (/jobs/nearby, /jobs/:id/*)
+app.use('/admin',     adminRoutes);        // Admin panel (protected)
+app.use('/admin',     adminAuthRoutes);     // Admin auth (/admin/login, /admin/logout)
+app.use('/documents', documentRoutes);      // Document upload & management
+app.use('/',          customerRoutes);     // /bookings, /ratings
 
 // Health check (used by Docker / load balancer / nginx)
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'carenearby-api' }));

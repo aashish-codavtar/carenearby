@@ -4,7 +4,9 @@ const mongoose = require('mongoose');
 const User       = require('../models/User');
 const PSWProfile = require('../models/PSWProfile');
 const Booking    = require('../models/Booking');
+const Document   = require('../models/Document');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticateAdmin, authenticateAdminOrUser, requireAdminRole, logAudit } = require('../middleware/adminAuth');
 
 const router = express.Router();
 
@@ -13,8 +15,7 @@ const router = express.Router();
 // Supports optional query: ?approved=true|false
 router.get(
   '/psws',
-  authenticate,
-  requireRole('ADMIN'),
+  authenticateAdminOrUser,
   async (req, res) => {
     try {
       const userFilter = { role: 'PSW' };
@@ -54,8 +55,7 @@ router.get(
 // Approve a PSW. Creates their profile document if it doesn't exist yet.
 router.post(
   '/psws/:id/approve',
-  authenticate,
-  requireRole('ADMIN'),
+  authenticateAdminOrUser,
   async (req, res) => {
     try {
       const { id } = req.params;
@@ -88,8 +88,7 @@ router.post(
 // Reject (or de-approve) a PSW with an optional reason.
 router.post(
   '/psws/:id/reject',
-  authenticate,
-  requireRole('ADMIN'),
+  authenticateAdminOrUser,
   async (req, res) => {
     try {
       const { id } = req.params;
@@ -123,8 +122,7 @@ router.post(
 // Get full detail for one PSW including submitted documents.
 router.get(
   '/psws/:id',
-  authenticate,
-  requireRole('ADMIN'),
+  authenticateAdminOrUser,
   async (req, res) => {
     try {
       const { id } = req.params;
@@ -150,8 +148,7 @@ router.get(
 // Body: { docType: string, verified: boolean, rejectionNote?: string }
 router.post(
   '/psws/:id/verify-document',
-  authenticate,
-  requireRole('ADMIN'),
+  authenticateAdminOrUser,
   async (req, res) => {
     try {
       const { id } = req.params;
@@ -186,8 +183,7 @@ router.post(
 // Body: { cleared: boolean }
 router.patch(
   '/psws/:id/police-check',
-  authenticate,
-  requireRole('ADMIN'),
+  authenticateAdminOrUser,
   async (req, res) => {
     try {
       const { id } = req.params;
@@ -216,8 +212,7 @@ router.patch(
 // List all bookings with pagination. Optional filter: ?status=REQUESTED|ACCEPTED|...
 router.get(
   '/bookings',
-  authenticate,
-  requireRole('ADMIN'),
+  authenticateAdminOrUser,
   async (req, res) => {
     try {
       const { status, page = 1, limit = 20 } = req.query;
@@ -249,6 +244,224 @@ router.get(
         page:  pageNum,
         pages: Math.ceil(total / limitNum),
         bookings,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// ── Document Management Endpoints ─────────────────────────────────────────────
+
+// GET /admin/documents - List all documents with filters
+router.get(
+  '/documents',
+  authenticateAdminOrUser,
+  async (req, res) => {
+    try {
+      const { status, docType, entityType, page = 1, limit = 20 } = req.query;
+
+      const filter = {};
+      if (status) filter.status = status;
+      if (docType) filter.docType = docType;
+      if (entityType) filter.entityType = entityType;
+
+      const pageNum = Math.max(1, parseInt(page, 10) || 1);
+      const limitNum = Math.min(100, parseInt(limit, 10) || 20);
+
+      const [documents, total] = await Promise.all([
+        Document.find(filter)
+          .sort({ submittedAt: -1 })
+          .skip((pageNum - 1) * limitNum)
+          .limit(limitNum)
+          .populate('reviewedBy', 'username')
+          .lean(),
+        Document.countDocuments(filter),
+      ]);
+
+      res.json({
+        total,
+        page: pageNum,
+        pages: Math.ceil(total / limitNum),
+        documents,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// GET /admin/documents/pending - Get pending documents count
+router.get(
+  '/documents/pending',
+  authenticateAdminOrUser,
+  async (req, res) => {
+    try {
+      const count = await Document.countDocuments({ status: 'PENDING', isActive: true });
+      res.json({ pendingCount: count });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// GET /admin/documents/:id - Get document detail
+router.get(
+  '/documents/:id',
+  authenticateAdminOrUser,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({ error: 'Invalid document ID' });
+      }
+
+      const document = await Document.findById(id)
+        .populate('reviewedBy', 'username')
+        .lean();
+
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      res.json({ document });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// POST /admin/documents/:id/approve - Approve a document
+router.post(
+  '/documents/:id/approve',
+  authenticateAdminOrUser,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { notes } = req.body;
+
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({ error: 'Invalid document ID' });
+      }
+
+      const document = await Document.findById(id);
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      await document.approve(req.user._id, notes || '');
+      await logAudit(req.user._id, 'DOCUMENT_APPROVED', 'Document', document._id, { docType: document.docType }, req);
+
+      res.json({ message: 'Document approved', document });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// POST /admin/documents/:id/reject - Reject a document
+router.post(
+  '/documents/:id/reject',
+  authenticateAdminOrUser,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
+
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({ error: 'Invalid document ID' });
+      }
+
+      if (!reason) {
+        return res.status(400).json({ error: 'Rejection reason is required' });
+      }
+
+      const document = await Document.findById(id);
+      if (!document) {
+        return res.status(404).json({ error: 'Document not found' });
+      }
+
+      await document.reject(req.user._id, reason);
+      await logAudit(req.user._id, 'DOCUMENT_REJECTED', 'Document', document._id, { docType: document.docType, reason }, req);
+
+      res.json({ message: 'Document rejected', document });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// GET /admin/documents/psw/:pswId - Get all documents for a PSW
+router.get(
+  '/documents/psw/:pswId',
+  authenticateAdminOrUser,
+  async (req, res) => {
+    try {
+      const { pswId } = req.params;
+
+      if (!mongoose.isValidObjectId(pswId)) {
+        return res.status(400).json({ error: 'Invalid PSW ID' });
+      }
+
+      const profile = await PSWProfile.findOne({ userId: pswId });
+      if (!profile) {
+        return res.status(404).json({ error: 'PSW profile not found' });
+      }
+
+      const documents = await Document.find({
+        entityType: 'PSW',
+        entityId: profile._id,
+        isActive: true,
+      })
+        .sort({ submittedAt: -1 })
+        .lean();
+
+      res.json({ documents });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// ── Audit Log Endpoints ─────────────────────────────────────────────────────
+
+router.get(
+  '/audit-logs',
+  authenticateAdminOrUser,
+  async (req, res) => {
+    try {
+      const { action, page = 1, limit = 50 } = req.query;
+      const AuditLog = require('../models/AuditLog');
+
+      const filter = {};
+      if (action) filter.action = action;
+
+      const pageNum = Math.max(1, parseInt(page, 10) || 1);
+      const limitNum = Math.min(100, parseInt(limit, 10) || 50);
+
+      const [logs, total] = await Promise.all([
+        AuditLog.find(filter)
+          .sort({ createdAt: -1 })
+          .skip((pageNum - 1) * limitNum)
+          .limit(limitNum)
+          .populate('adminId', 'username')
+          .lean(),
+        AuditLog.countDocuments(filter),
+      ]);
+
+      res.json({
+        total,
+        page: pageNum,
+        pages: Math.ceil(total / limitNum),
+        logs,
       });
     } catch (err) {
       console.error(err);

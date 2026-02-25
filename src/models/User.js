@@ -62,4 +62,10 @@ const userSchema = new mongoose.Schema(
 // Required for $geoNear and $near queries
 userSchema.index({ location: '2dsphere' });
 
+userSchema.index({ role: 1, isVerified: 1 });
+userSchema.index({ role: 1, createdAt: -1 });
+userSchema.index({ phone: 1 }, { unique: true });
+userSchema.index({ email: 1 });
+userSchema.index({ rating: -1 });
+
 module.exports = mongoose.model('User', userSchema);
