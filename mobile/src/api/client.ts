@@ -71,6 +71,10 @@ export function apiMyBookings() {
   return request<{ bookings: Booking[] }>('GET', '/bookings/my');
 }
 
+export function apiGetBooking(id: string) {
+  return request<{ booking: Booking }>('GET', `/bookings/${id}`);
+}
+
 export function apiCancelBooking(id: string) {
   return request<{ booking: Booking }>('PATCH', `/bookings/${id}/cancel`);
 }
@@ -124,8 +128,35 @@ export function apiUpdateProfile(payload: {
 
 // ─── Documents ────────────────────────────────────────────────────────────────
 
-export function apiUploadDocument(payload: { docType: string; label: string; dataUrl: string }) {
-  return request<{ message: string; docType: string }>('POST', '/profile/documents', payload);
+export async function apiUploadDocument(payload: { docType: string; label: string; dataUrl: string; mimeType?: string; fileName?: string }) {
+  const token = await Storage.getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  // Build FormData with the file as a blob (works on web and native)
+  const form = new FormData();
+  form.append('docType', payload.docType);
+  form.append('label', payload.label);
+
+  if (payload.dataUrl) {
+    // Convert base64 dataUrl → Blob → append as file
+    const mime = payload.mimeType ?? payload.dataUrl.split(';')[0].split(':')[1] ?? 'image/jpeg';
+    const b64  = payload.dataUrl.includes(',') ? payload.dataUrl.split(',')[1] : payload.dataUrl;
+    const binary = atob(b64);
+    const bytes  = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: mime });
+    const name = payload.fileName ?? `doc_${Date.now()}.${mime.split('/')[1] || 'jpg'}`;
+    form.append('file', blob, name);
+  }
+
+  const res = await fetch(`${API_BASE}/documents/upload`, { method: 'POST', headers, body: form });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = (json as any).error || (json as any).message || `Upload failed: ${res.status}`;
+    throw new Error(message);
+  }
+  return json as { message: string; document: { id: string; docType: string; status: string; url: string; submittedAt: string } };
 }
 
 // ─── Admin ────────────────────────────────────────────────────────────────────

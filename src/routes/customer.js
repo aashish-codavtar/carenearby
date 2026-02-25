@@ -116,6 +116,30 @@ router.get(
   }
 );
 
+// ── GET /bookings/:id ─────────────────────────────────────────────────────────
+// Fetch a single booking by ID (customer must own it).
+router.get(
+  '/bookings/:id',
+  authenticate,
+  requireRole('CUSTOMER'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({ error: 'Invalid booking ID' });
+      }
+      const booking = await Booking.findOne({ _id: id, customerId: req.user._id })
+        .populate('customerId', 'name phone rating')
+        .populate('pswId', 'name phone rating ratingCount');
+      if (!booking) return res.status(404).json({ error: 'Booking not found' });
+      res.json({ booking });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
 // ── POST /ratings ─────────────────────────────────────────────────────────────
 // Rate a PSW 1-5 stars after a COMPLETED booking.
 // One rating per completed booking is enforced by checking the booking status.

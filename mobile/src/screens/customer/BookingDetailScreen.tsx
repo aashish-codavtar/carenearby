@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert, Platform, Pressable, ScrollView, StyleSheet,
   Text, TextInput, View,
@@ -8,7 +8,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
-import { apiCancelBooking, apiRateBooking, Booking } from '../../api/client';
+import { apiCancelBooking, apiGetBooking, apiRateBooking, Booking } from '../../api/client';
 import { StatusBadge } from '../../components/StatusBadge';
 import { StatusTimeline } from '../../components/StatusTimeline';
 import { Colors, ServiceIcons, StatusColors } from '../../utils/colors';
@@ -33,6 +33,11 @@ export function BookingDetailScreen() {
   const [rated,      setRated]      = useState(false);
   const [loading,    setLoading]    = useState(false);
   const [cancelling, setCancelling] = useState(false);
+
+  // Fetch fresh booking data on mount so status is always up-to-date
+  useEffect(() => {
+    apiGetBooking(booking._id).then(res => setBooking(res.booking)).catch(() => {});
+  }, [booking._id]);
 
   const statusColor = StatusColors[booking.status] ?? Colors.systemGray;
   const icon        = ServiceIcons[booking.serviceType] ?? '🏥';
