@@ -461,15 +461,17 @@ document.getElementById('reject-doc-btn').addEventListener('click', showRejectFo
 document.getElementById('confirm-reject-btn').addEventListener('click', confirmReject);
 
 // Check auth on load
-if (token) {
-  try {
-    const data = await apiCall('/admin/me');
-    document.getElementById('admin-name').textContent = data.admin.username;
-    showScreen('admin-screen');
-    showPage('dashboard');
-  } catch {
+(async function init() {
+  if (token) {
+    try {
+      const data = await apiCall('/admin/me');
+      document.getElementById('admin-name').textContent = data.admin.username;
+      showScreen('admin-screen');
+      showPage('dashboard');
+    } catch {
+      logout();
+    }
+  } else {
     showScreen('login-screen');
   }
-} else {
-  showScreen('login-screen');
-}
+})();
