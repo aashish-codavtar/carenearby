@@ -50,6 +50,7 @@ async function generateOTP(phone) {
     { upsert: true, new: true }
   );
 
+  console.log(`[OTP] ${phone} → ${otp}`);
   await sendSMS(phone, otp);
 
   return otp;
