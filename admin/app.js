@@ -5,6 +5,20 @@ let currentPage = 'dashboard';
 let currentDoc = null;
 let currentPSW = null;
 
+// ── Toast notifications ────────────────────────────────────────────────────────
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => toast.classList.add('toast-show'), 10);
+  setTimeout(() => {
+    toast.classList.remove('toast-show');
+    setTimeout(() => toast.remove(), 300);
+  }, 3500);
+}
+
 // API helpers
 async function apiCall(endpoint, options = {}) {
   const headers = { 'Content-Type': 'application/json' };
@@ -69,21 +83,24 @@ async function loadPage(page) {
 // Dashboard
 async function loadDashboard() {
   try {
-    const [pendingRes, pswsRes] = await Promise.all([
+    const [pendingRes, pswsRes, bookingsRes] = await Promise.all([
       apiCall('/admin/documents/pending'),
-      apiCall('/admin/psws')
+      apiCall('/admin/psws'),
+      apiCall('/admin/bookings?limit=1'),
     ]);
-    
+
     document.getElementById('stat-pending').textContent = pendingRes.pendingCount || 0;
     document.getElementById('stat-psws').textContent = pswsRes.total || 0;
-    
+    document.getElementById('stat-bookings').textContent = bookingsRes.total || 0;
+
     const approved = pswsRes.psws?.filter(p => p.profile?.approvedByAdmin).length || 0;
     document.getElementById('stat-approved').textContent = approved;
-    
+
     const docs = await apiCall('/admin/documents?status=PENDING&limit=5');
     renderRecentDocs(docs.documents || []);
   } catch (e) {
     console.error(e);
+    showToast('Failed to load dashboard data', 'error');
   }
 }
 
@@ -113,11 +130,12 @@ async function loadPSWs() {
   try {
     const data = await apiCall(`/admin/psws${query}`);
     renderPSWs(data.psws || []);
-    
     document.getElementById('stat-psws').textContent = data.total || 0;
     document.getElementById('stat-approved').textContent = data.psws?.filter(p => p.profile?.approvedByAdmin).length || 0;
   } catch (e) {
     console.error(e);
+    showToast('Failed to load PSW list: ' + e.message, 'error');
+    document.querySelector('#psw-table tbody').innerHTML = '<tr><td colspan="6" class="loading error-text">Failed to load. Try refreshing.</td></tr>';
   }
 }
 
@@ -145,68 +163,64 @@ function renderPSWs(psws) {
 
 async function viewPSW(pswId) {
   try {
-    const data = await apiCall(`/admin/psws/${pswId}`);
+    const [data, docsData] = await Promise.all([
+      apiCall(`/admin/psws/${pswId}`),
+      apiCall(`/admin/documents/psw/${pswId}`),
+    ]);
     currentPSW = data.psw;
-    
-    const docsData = await apiCall(`/admin/documents/psw/${pswId}`);
-    
+
     const p = data.psw;
+    const isApproved = p.profile?.approvedByAdmin ?? false;
+
     let html = `
-      <div class="psw-detail-section">
-        <h4>Name</h4><p>${p.name}</p>
+      <div class="psw-info-grid">
+        <div class="psw-detail-section"><h4>Name</h4><p>${p.name}</p></div>
+        <div class="psw-detail-section"><h4>Phone</h4><p>${p.phone}</p></div>
+        <div class="psw-detail-section"><h4>Email</h4><p>${p.email || 'N/A'}</p></div>
+        <div class="psw-detail-section"><h4>Qualification</h4><p>${p.profile?.qualificationType || 'PSW'}</p></div>
+        <div class="psw-detail-section"><h4>License</h4><p>${p.profile?.licenseNumber || 'N/A'}</p></div>
+        <div class="psw-detail-section"><h4>College</h4><p>${p.profile?.collegeName || 'N/A'}</p></div>
+        <div class="psw-detail-section"><h4>Experience</h4><p>${p.profile?.experienceYears || 0} yrs</p></div>
+        <div class="psw-detail-section"><h4>Police Check</h4><p>${p.profile?.policeCheckCleared ? '✅ Cleared' : '❌ Not cleared'}</p></div>
+        <div class="psw-detail-section"><h4>Status</h4><p><span class="badge badge-${isApproved ? 'approved' : 'pending'}">${isApproved ? 'Approved' : 'Pending'}</span></p></div>
       </div>
-      <div class="psw-detail-section">
-        <h4>Phone</h4><p>${p.phone}</p>
-      </div>
-      <div class="psw-detail-section">
-        <h4>Email</h4><p>${p.email || 'N/A'}</p>
-      </div>
-      <div class="psw-detail-section">
-        <h4>Qualification</h4><p>${p.profile?.qualificationType || 'PSW'}</p>
-      </div>
-      <div class="psw-detail-section">
-        <h4>License</h4><p>${p.profile?.licenseNumber || 'N/A'}</p>
-      </div>
-      <div class="psw-detail-section">
-        <h4>College</h4><p>${p.profile?.collegeName || 'N/A'}</p>
-      </div>
-      <div class="psw-detail-section">
-        <h4>Experience</h4><p>${p.profile?.experienceYears || 0} years</p>
-      </div>
-      <div class="psw-detail-section">
-        <h4>Police Check</h4><p>${p.profile?.policeCheckCleared ? '✅ Cleared' : '❌ Not cleared'}</p>
-      </div>
-      <div class="psw-detail-section">
-        <h4>Status</h4><p><span class="badge badge-${p.profile?.approvedByAdmin ? 'approved' : 'pending'}">${p.profile?.approvedByAdmin ? 'Approved' : 'Pending'}</span></p>
-      </div>
-      <div class="psw-detail-section">
-        <h4>Documents (${docsData.documents?.length || 0})</h4>
-        ${docsData.documents?.map(d => {
-          const imgSrc = d.url || d.dataUrl || '';
-          const isImg = imgSrc && (d.mimeType?.startsWith('image/') || imgSrc.startsWith('data:image') || imgSrc.match(/\.(jpg|jpeg|png|gif)$/i));
-          return `
-          <div style="margin:8px 0;padding:12px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-              <strong>${d.docType}</strong>
-              <span class="badge badge-${d.status.toLowerCase()}">${d.status}</span>
-            </div>
-            ${isImg ? `<img src="${imgSrc}" style="width:100%;max-height:200px;object-fit:contain;border-radius:6px;background:#000;" />` : ''}
-            ${!isImg && imgSrc ? `<a href="${imgSrc}" target="_blank" class="btn btn-view" style="display:inline-block;margin-top:4px;">View File</a>` : ''}
-            ${!imgSrc ? '<p style="color:#9ca3af;font-size:12px;">No file uploaded</p>' : ''}
-            ${d.status === 'PENDING' ? `
-              <div style="margin-top:8px;display:flex;gap:8px;">
-                <button class="btn btn-approve" onclick="approveDocFromPSW('${d._id}','${p._id}')">✅ Approve</button>
-                <button class="btn" style="background:#fee2e2;color:#dc2626;" onclick="rejectDocFromPSW('${d._id}','${p._id}')">✗ Reject</button>
-              </div>` : ''}
-          </div>`;
-        }).join('') || '<p style="color:#9ca3af;">No documents uploaded yet</p>'}
-      </div>
+      <hr style="margin:16px 0;border:none;border-top:1px solid #e5e7eb;">
+      <h4 style="margin-bottom:12px;color:#374151;">Documents (${docsData.documents?.length || 0})</h4>
+      ${docsData.documents?.length ? docsData.documents.map(d => {
+        const imgSrc = d.url || d.dataUrl || '';
+        const isImg = imgSrc && (d.mimeType?.startsWith('image/') || imgSrc.startsWith('data:image') || imgSrc.match(/\.(jpg|jpeg|png|gif)$/i));
+        return `
+        <div style="margin:8px 0;padding:12px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <strong>${d.docType}</strong>
+            <span class="badge badge-${d.status.toLowerCase()}">${d.status}</span>
+          </div>
+          ${isImg ? `<img src="${imgSrc}" style="width:100%;max-height:200px;object-fit:contain;border-radius:6px;background:#000;" />` : ''}
+          ${!isImg && imgSrc ? `<a href="${imgSrc}" target="_blank" class="btn btn-view" style="display:inline-block;margin-top:4px;">View File</a>` : ''}
+          ${!imgSrc ? '<p style="color:#9ca3af;font-size:12px;">No file uploaded</p>' : ''}
+          ${d.status === 'PENDING' ? `
+            <div style="margin-top:8px;display:flex;gap:8px;">
+              <button class="btn btn-approve" onclick="approveDocFromPSW('${d._id}','${p._id}')">✅ Approve Doc</button>
+              <button class="btn btn-reject" onclick="rejectDocFromPSW('${d._id}','${p._id}')">✗ Reject Doc</button>
+            </div>` : ''}
+        </div>`;
+      }).join('') : '<p style="color:#9ca3af;padding:12px 0;">No documents uploaded yet</p>'}
     `;
-    
+
     document.getElementById('psw-modal-body').innerHTML = html;
+
+    // Show PSW-level approve/reject actions
+    const actions = document.getElementById('psw-modal-actions');
+    actions.classList.remove('hidden');
+    const approveBtn = document.getElementById('approve-psw-modal-btn');
+    const rejectBtn  = document.getElementById('reject-psw-modal-btn');
+    approveBtn.textContent = isApproved ? '✓ Already Approved' : '✅ Approve PSW';
+    approveBtn.disabled = isApproved;
+    rejectBtn.textContent = isApproved ? '✗ Revoke Approval' : '✗ Reject PSW';
+
     document.getElementById('psw-modal').classList.remove('hidden');
   } catch (e) {
-    alert(e.message);
+    showToast('Failed to load PSW: ' + e.message, 'error');
   }
 }
 
@@ -214,10 +228,40 @@ async function approvePSW(pswId) {
   if (!confirm('Approve this PSW?')) return;
   try {
     await apiCall(`/admin/psws/${pswId}/approve`, { method: 'POST' });
-    alert('PSW approved!');
+    showToast('PSW approved successfully!', 'success');
     loadPSWs();
   } catch (e) {
-    alert(e.message);
+    showToast('Failed to approve PSW: ' + e.message, 'error');
+  }
+}
+
+async function approvePSWFromModal() {
+  if (!currentPSW) return;
+  if (!confirm(`Approve ${currentPSW.name} as a verified PSW?`)) return;
+  try {
+    await apiCall(`/admin/psws/${currentPSW._id}/approve`, { method: 'POST' });
+    showToast('PSW approved!', 'success');
+    document.getElementById('psw-modal').classList.add('hidden');
+    if (currentPage === 'psws') loadPSWs();
+  } catch (e) {
+    showToast('Failed to approve: ' + e.message, 'error');
+  }
+}
+
+async function rejectPSWFromModal() {
+  if (!currentPSW) return;
+  const reason = prompt(`Rejection reason for ${currentPSW.name} (optional):`);
+  if (reason === null) return; // cancelled
+  try {
+    await apiCall(`/admin/psws/${currentPSW._id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason || 'Application not approved.' }),
+    });
+    showToast('PSW rejected.', 'info');
+    document.getElementById('psw-modal').classList.add('hidden');
+    if (currentPage === 'psws') loadPSWs();
+  } catch (e) {
+    showToast('Failed to reject: ' + e.message, 'error');
   }
 }
 
@@ -225,16 +269,18 @@ async function approvePSW(pswId) {
 async function loadDocuments() {
   const status = document.getElementById('doc-status-filter').value;
   const docType = document.getElementById('doc-type-filter').value;
-  
+
   let query = '?';
   if (status) query += `status=${status}&`;
   if (docType) query += `docType=${docType}&`;
-  
+
   try {
     const data = await apiCall(`/admin/documents${query}`);
     renderDocuments(data.documents || []);
   } catch (e) {
     console.error(e);
+    showToast('Failed to load documents: ' + e.message, 'error');
+    document.querySelector('#documents-table tbody').innerHTML = '<tr><td colspan="6" class="loading error-text">Failed to load. Try refreshing.</td></tr>';
   }
 }
 
@@ -305,13 +351,13 @@ async function approveDocument() {
   try {
     await apiCall(`/admin/documents/${currentDoc._id}/approve`, {
       method: 'POST',
-      body: JSON.stringify({})
+      body: JSON.stringify({}),
     });
-    alert('Document approved!');
+    showToast('Document approved!', 'success');
     document.getElementById('doc-modal').classList.add('hidden');
     loadDocuments();
   } catch (e) {
-    alert(e.message);
+    showToast('Failed to approve: ' + e.message, 'error');
   }
 }
 
@@ -322,20 +368,20 @@ function showRejectForm() {
 async function confirmReject() {
   const reason = document.getElementById('reject-reason').value.trim();
   if (!reason) {
-    alert('Rejection reason is required');
+    showToast('Rejection reason is required', 'error');
     return;
   }
   try {
     await apiCall(`/admin/documents/${currentDoc._id}/reject`, {
       method: 'POST',
-      body: JSON.stringify({ reason })
+      body: JSON.stringify({ reason }),
     });
-    alert('Document rejected!');
+    showToast('Document rejected.', 'info');
     document.getElementById('doc-modal').classList.add('hidden');
     document.getElementById('reject-reason').value = '';
     loadDocuments();
   } catch (e) {
-    alert(e.message);
+    showToast('Failed to reject: ' + e.message, 'error');
   }
 }
 
@@ -343,14 +389,15 @@ async function confirmReject() {
 async function loadBookings() {
   const status = document.getElementById('booking-status-filter').value;
   const query = status ? `?status=${status}` : '';
-  
+
   try {
     const data = await apiCall(`/admin/bookings${query}`);
     renderBookings(data.bookings || []);
-    
     document.getElementById('stat-bookings').textContent = data.total || 0;
   } catch (e) {
     console.error(e);
+    showToast('Failed to load bookings: ' + e.message, 'error');
+    document.querySelector('#bookings-table tbody').innerHTML = '<tr><td colspan="6" class="loading error-text">Failed to load. Try refreshing.</td></tr>';
   }
 }
 
@@ -380,6 +427,8 @@ async function loadAudit() {
     renderAudit(data.logs || []);
   } catch (e) {
     console.error(e);
+    showToast('Failed to load audit logs: ' + e.message, 'error');
+    document.querySelector('#audit-table tbody').innerHTML = '<tr><td colspan="4" class="loading error-text">Failed to load. Try refreshing.</td></tr>';
   }
 }
 
@@ -405,9 +454,9 @@ async function approveDocFromPSW(docId, pswId) {
   if (!confirm('Approve this document?')) return;
   try {
     await apiCall(`/admin/documents/${docId}/approve`, { method: 'POST', body: JSON.stringify({}) });
-    alert('Document approved!');
+    showToast('Document approved!', 'success');
     viewPSW(pswId);
-  } catch (e) { alert(e.message); }
+  } catch (e) { showToast('Failed: ' + e.message, 'error'); }
 }
 
 async function rejectDocFromPSW(docId, pswId) {
@@ -415,9 +464,9 @@ async function rejectDocFromPSW(docId, pswId) {
   if (!reason) return;
   try {
     await apiCall(`/admin/documents/${docId}/reject`, { method: 'POST', body: JSON.stringify({ reason }) });
-    alert('Document rejected!');
+    showToast('Document rejected.', 'info');
     viewPSW(pswId);
-  } catch (e) { alert(e.message); }
+  } catch (e) { showToast('Failed: ' + e.message, 'error'); }
 }
 
 // Event Listeners
@@ -459,6 +508,8 @@ document.querySelectorAll('.modal-close').forEach(btn => {
 document.getElementById('approve-doc-btn').addEventListener('click', approveDocument);
 document.getElementById('reject-doc-btn').addEventListener('click', showRejectForm);
 document.getElementById('confirm-reject-btn').addEventListener('click', confirmReject);
+document.getElementById('approve-psw-modal-btn').addEventListener('click', approvePSWFromModal);
+document.getElementById('reject-psw-modal-btn').addEventListener('click', rejectPSWFromModal);
 
 // Check auth on load
 (async function init() {

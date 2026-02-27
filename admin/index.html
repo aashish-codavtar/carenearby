@@ -27,11 +27,11 @@
         <span>CareNearby</span>
       </div>
       <nav>
-        <a href="#" data-page="dashboard" class="active">📊 Dashboard</a>
-        <a href="#" data-page="psws">👨‍⚕️ PSW Workers</a>
-        <a href="#" data-page="documents">📄 Documents</a>
-        <a href="#" data-page="bookings">📅 Bookings</a>
-        <a href="#" data-page="audit">📋 Audit Logs</a>
+        <a href="#" data-page="dashboard" class="active"><span class="nav-icon">📊</span><span class="nav-text"> Dashboard</span></a>
+        <a href="#" data-page="psws"><span class="nav-icon">👨‍⚕️</span><span class="nav-text"> PSW Workers</span></a>
+        <a href="#" data-page="documents"><span class="nav-icon">📄</span><span class="nav-text"> Documents</span></a>
+        <a href="#" data-page="bookings"><span class="nav-icon">📅</span><span class="nav-text"> Bookings</span></a>
+        <a href="#" data-page="audit"><span class="nav-icon">📋</span><span class="nav-text"> Audit Logs</span></a>
       </nav>
       <div class="sidebar-footer">
         <span id="admin-name"></span>
@@ -212,8 +212,15 @@
       <span class="modal-close">&times;</span>
       <h3>PSW Details</h3>
       <div id="psw-modal-body"></div>
+      <div id="psw-modal-actions" class="modal-actions hidden">
+        <button id="approve-psw-modal-btn" class="btn-approve">✅ Approve PSW</button>
+        <button id="reject-psw-modal-btn" class="btn-reject">✗ Reject PSW</button>
+      </div>
     </div>
   </div>
+
+  <!-- Toast notifications -->
+  <div id="toast-container"></div>
 
   <script src="/admin/app.js"></script>
 </body>

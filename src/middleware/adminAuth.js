@@ -5,6 +5,7 @@ const User   = require('../models/User');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
+
 // Accepts both Admin-model tokens (web panel) and User-model tokens with role=ADMIN (mobile app)
 async function authenticateAdminOrUser(req, res, next) {
   const header = req.headers.authorization;
@@ -45,7 +46,7 @@ async function authenticateAdmin(req, res, next) {
   const token = header.slice(7);
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const payload = jwt.verify(token, JWT_SECRET);
     const admin   = await Admin.findById(payload.adminId).lean();
 
     if (!admin) return res.status(401).json({ error: 'Admin not found' });
