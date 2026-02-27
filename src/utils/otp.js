@@ -50,10 +50,7 @@ async function generateOTP(phone) {
     { upsert: true, new: true }
   );
 
-  // Fire-and-forget: do not await so the API responds instantly
-  sendSMS(phone, otp).catch((err) =>
-    console.error('[OTP] sendSMS uncaught error:', err.message)
-  );
+  await sendSMS(phone, otp);
 
   return otp;
 }

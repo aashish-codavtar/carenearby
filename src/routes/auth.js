@@ -77,7 +77,7 @@ router.post(
         }
       }
 
-      generateOTP(phone);
+      await generateOTP(phone);
 
       res.json({ message: 'OTP sent', phone });
     } catch (err) {
