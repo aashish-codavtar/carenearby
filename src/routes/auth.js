@@ -10,6 +10,8 @@ const { authenticate }   = require('../middleware/auth');
 
 const router = express.Router();
 
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+
 // ── Name sanitizer ────────────────────────────────────────────────────────────
 // Title-cases each word, collapses extra spaces, strips leading/trailing "and"/"&"
 function sanitizeName(raw) {
@@ -113,7 +115,7 @@ router.post(
 
       const token = jwt.sign(
         { userId: user._id, role: user.role },
-        process.env.JWT_SECRET,
+        JWT_SECRET,
         { expiresIn: '30d' }
       );
 
