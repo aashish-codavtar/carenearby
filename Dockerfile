@@ -14,6 +14,7 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy application source
 COPY src/ ./src/
+COPY admin/ ./admin/
 
 # Switch to non-root user
 USER appuser
