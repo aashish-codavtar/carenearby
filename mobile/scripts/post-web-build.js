@@ -16,6 +16,16 @@ const WEB  = path.join(__dirname, '..', 'web');
 const indexPath = path.join(DIST, 'index.html');
 let html = fs.readFileSync(indexPath, 'utf8');
 
+// Inject app background colour so the body never shows as black on web
+if (!html.includes('background-color: #F1F5F9')) {
+  html = html.replace(
+    'body {\n        overflow: hidden;\n      }',
+    'body {\n        overflow: hidden;\n        background-color: #F1F5F9;\n      }'
+  );
+  fs.writeFileSync(indexPath, html);
+  console.log('✔ Injected body background-color into index.html');
+}
+
 const PWA_TAGS = `
   <!-- PWA Manifest (enables Add to Home Screen on Android/Chrome) -->
   <link rel="manifest" href="/manifest.json" />

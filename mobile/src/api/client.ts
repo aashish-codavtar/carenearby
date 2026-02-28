@@ -62,6 +62,7 @@ export function apiCreateBooking(payload: {
   hours: number;
   scheduledAt: string;
   location: { coordinates: [number, number] };
+  address?: string;
   notes?: string;
 }) {
   return request<{ booking: Booking }>('POST', '/bookings', payload);
@@ -215,6 +216,7 @@ export interface Booking {
   hours: number;
   scheduledAt: string;
   location: { coordinates: [number, number] };
+  address?: string;
   status: 'REQUESTED' | 'ACCEPTED' | 'STARTED' | 'COMPLETED' | 'CANCELLED';
   totalPrice: number;
   paymentStatus: string;

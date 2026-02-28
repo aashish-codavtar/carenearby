@@ -176,11 +176,13 @@ export function HomeScreen() {
   const { user } = useAuth();
   const nav       = useNavigation<any>();
   const insets    = useSafeAreaInsets();
-  const [bookings,   setBookings]   = useState<Booking[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [lang,       setLang]       = useState<'en' | 'fr'>('en');
-  const [photoUri,   setPhotoUri]   = useState<string | null>(null);
+  const [bookings,      setBookings]      = useState<Booking[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [refreshing,    setRefreshing]    = useState(false);
+  const [lang,          setLang]          = useState<'en' | 'fr'>('en');
+  const [photoUri,      setPhotoUri]      = useState<string | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);  // Android deferred prompt
+  const [showIOSHint,   setShowIOSHint]   = useState(false);       // iOS share-sheet hint
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const t              = T[lang];
@@ -201,8 +203,39 @@ export function HomeScreen() {
   // Reload bookings every time the Home tab comes into focus
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  // Re-read photo every time the Home tab gains focus (so changes on ProfileScreen reflect immediately)
+  useFocusEffect(useCallback(() => {
+    Storage.getPhotoUri().then(uri => setPhotoUri(uri ?? null));
+  }, []));
+
+  // PWA install detection (web only)
   useEffect(() => {
-    Storage.getPhotoUri().then(uri => { if (uri) setPhotoUri(uri); });
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const isStandalone =
+      (window.navigator as any).standalone === true ||
+      window.matchMedia('(display-mode: standalone)').matches;
+    if (isStandalone) return; // already installed
+
+    // Android / Chrome: listen for native install prompt
+    const handler = (e: any) => { e.preventDefault(); setInstallPrompt(e); };
+    window.addEventListener('beforeinstallprompt', handler);
+
+    // iOS Safari: no beforeinstallprompt — show manual instructions instead
+    const ua = navigator.userAgent;
+    const isIOS = /iphone|ipad|ipod/i.test(ua) && !(window as any).MSStream;
+    if (isIOS) setShowIOSHint(true);
+
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  async function triggerInstall() {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') setInstallPrompt(null);
+  }
+
+  useEffect(() => {
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.2, duration: 800, useNativeDriver: true }),
@@ -476,6 +509,36 @@ export function HomeScreen() {
           ))
         )}
 
+        {/* ── Android / Chrome install banner ── */}
+        {installPrompt && (
+          <Pressable style={styles.installBanner} onPress={triggerInstall}>
+            <View style={styles.installBannerLeft}>
+              <Text style={styles.installBannerIcon}>📲</Text>
+              <View>
+                <Text style={styles.installBannerTitle}>Install CareNearby App</Text>
+                <Text style={styles.installBannerSub}>Add to home screen for quick access</Text>
+              </View>
+            </View>
+            <Text style={styles.installBannerBtn}>Install</Text>
+          </Pressable>
+        )}
+
+        {/* ── iOS Safari install hint ── */}
+        {showIOSHint && (
+          <View style={styles.installBanner}>
+            <View style={styles.installBannerLeft}>
+              <Text style={styles.installBannerIcon}>📲</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.installBannerTitle}>Install on iPhone / iPad</Text>
+                <Text style={styles.installBannerSub}>Tap <Text style={{ fontWeight: '700' }}>Share ⎙</Text> then <Text style={{ fontWeight: '700' }}>"Add to Home Screen"</Text></Text>
+              </View>
+            </View>
+            <Pressable onPress={() => setShowIOSHint(false)} style={styles.installDismiss}>
+              <Text style={styles.installDismissText}>✕</Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* ── Footer ── */}
         <View style={styles.footer}>
           <Text style={styles.footerLogo}>CareNearby</Text>
@@ -639,6 +702,25 @@ const styles = StyleSheet.create({
     paddingVertical: 13, paddingHorizontal: 24,
   },
   emptyBookBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+
+  // Install banner
+  installBanner: {
+    marginHorizontal: 16, marginBottom: 12,
+    backgroundColor: '#0A1628', borderRadius: 16, padding: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 6,
+  },
+  installBannerLeft:  { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  installBannerIcon:  { fontSize: 28 },
+  installBannerTitle: { fontSize: 14, fontWeight: '700', color: '#fff', marginBottom: 2 },
+  installBannerSub:   { fontSize: 12, color: 'rgba(255,255,255,0.65)', flexShrink: 1 },
+  installBannerBtn: {
+    backgroundColor: '#007AFF', borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 8,
+    color: '#fff', fontSize: 13, fontWeight: '700', overflow: 'hidden',
+  },
+  installDismiss:     { padding: 6 },
+  installDismissText: { color: 'rgba(255,255,255,0.5)', fontSize: 16, fontWeight: '600' },
 
   // Footer
   footer: {

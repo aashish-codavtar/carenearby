@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert, Platform, Pressable, ScrollView, StyleSheet,
   Text, TextInput, View,
@@ -12,6 +12,10 @@ import { apiCancelBooking, apiGetBooking, apiRateBooking, Booking } from '../../
 import { StatusBadge } from '../../components/StatusBadge';
 import { StatusTimeline } from '../../components/StatusTimeline';
 import { Colors, ServiceIcons, StatusColors } from '../../utils/colors';
+
+// Conditionally import MapView – react-native-maps doesn't support web
+const MapView = Platform.OS !== 'web' ? require('react-native-maps').default : null;
+const Marker  = Platform.OS !== 'web' ? require('react-native-maps').Marker  : null;
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -41,6 +45,11 @@ export function BookingDetailScreen() {
 
   const statusColor = StatusColors[booking.status] ?? Colors.systemGray;
   const icon        = ServiceIcons[booking.serviceType] ?? '🏥';
+
+  const [lng, lat] = booking.location?.coordinates ?? [0, 0];
+  function openMaps() {
+    Linking.openURL(`https://www.google.com/maps?q=${lat},${lng}`);
+  }
 
   async function submitRating() {
     if (rating === 0) {
@@ -159,7 +168,7 @@ export function BookingDetailScreen() {
             ['📅 Date',      formatDate(booking.scheduledAt)],
             ['⏰ Start Time', formatTime(booking.scheduledAt)],
             ['⏱ Duration',   `${booking.hours} hours`],
-            ['📍 Location',   'Greater Sudbury, ON'],
+            ['📍 Address',    booking.address || 'Greater Sudbury, ON'],
             ['💳 Payment',    booking.paymentStatus],
             ['💰 Total',      `$${booking.totalPrice?.toFixed(0) ?? '—'}`],
           ] as [string, string][]).map(([label, value], i, arr) => (
@@ -183,6 +192,48 @@ export function BookingDetailScreen() {
           </View>
         </View>
       ) : null}
+
+      {/* Care Location Map */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Care Location</Text>
+        {Platform.OS !== 'web' && MapView && lat !== 0 ? (
+          <View style={styles.mapCard}>
+            <MapView
+              style={styles.map}
+              initialRegion={{ latitude: lat, longitude: lng, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
+              scrollEnabled={false}
+              zoomEnabled={false}
+              pitchEnabled={false}
+              rotateEnabled={false}
+            >
+              {Marker && <Marker coordinate={{ latitude: lat, longitude: lng }} title="Care Location" />}
+            </MapView>
+            <Pressable style={styles.mapOpenBtn} onPress={openMaps}>
+              <Text style={styles.mapOpenBtnText}>Open in Google Maps →</Text>
+            </Pressable>
+          </View>
+        ) : lat !== 0 ? (
+          <View style={styles.mapCard}>
+            {/* @ts-ignore – iframe is valid on web */}
+            <iframe
+              src={`https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.015},${lat - 0.015},${lng + 0.015},${lat + 0.015}&layer=mapnik&marker=${lat},${lng}`}
+              style={{ width: '100%', height: 200, border: 'none', display: 'block' } as any}
+              title="Care Location Map"
+              loading="lazy"
+            />
+            <Pressable style={styles.mapOpenBtn} onPress={openMaps}>
+              <Text style={styles.mapOpenBtnText}>Open in Google Maps →</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable style={styles.mapCard} onPress={openMaps}>
+            <View style={styles.mapNoCoords}>
+              <Text style={styles.mapNoCoordsText}>📍 {booking.address || 'Greater Sudbury, ON'}</Text>
+              <Text style={styles.mapOpenBtnText}>Open in Google Maps →</Text>
+            </View>
+          </Pressable>
+        )}
+      </View>
 
       {/* PSW Card */}
       {booking.psw ? (
@@ -491,4 +542,12 @@ const styles = StyleSheet.create({
   supportChevron: { fontSize: 22, color: Colors.systemGray3 },
 
   bookingId: { fontSize: 12, color: Colors.tertiaryLabel, textAlign: 'center', marginTop: 8 },
+
+  // Map
+  mapCard: { borderRadius: 16, overflow: 'hidden', backgroundColor: Colors.systemBackground, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
+  map: { height: 180, width: '100%' },
+  mapOpenBtn: { padding: 12, alignItems: 'center', borderTopWidth: 1, borderTopColor: Colors.separator },
+  mapOpenBtnText: { fontSize: 14, fontWeight: '600', color: Colors.systemBlue },
+  mapNoCoords: { padding: 18, alignItems: 'center', gap: 8 },
+  mapNoCoordsText: { fontSize: 15, fontWeight: '600', color: Colors.label },
 });

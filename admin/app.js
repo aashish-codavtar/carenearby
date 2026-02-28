@@ -30,8 +30,8 @@ async function apiCall(endpoint, options = {}) {
   });
   
   if (res.status === 401) {
-    logout();
-    throw new Error('Session expired');
+    logout('Session expired. Please sign in again.');
+    throw new Error('__session_expired__');
   }
   
   const data = await res.json();
@@ -50,10 +50,16 @@ async function login(username, password) {
   return data;
 }
 
-function logout() {
+function logout(message) {
   token = null;
   localStorage.removeItem('adminToken');
   showScreen('login-screen');
+  const errEl = document.getElementById('login-error');
+  if (errEl) errEl.textContent = message || '';
+}
+
+function isSessionError(e) {
+  return e && e.message === '__session_expired__';
 }
 
 function showScreen(screen) {
@@ -99,6 +105,7 @@ async function loadDashboard() {
     const docs = await apiCall('/admin/documents?status=PENDING&limit=5');
     renderRecentDocs(docs.documents || []);
   } catch (e) {
+    if (isSessionError(e)) return;
     console.error(e);
     showToast('Failed to load dashboard data', 'error');
   }
@@ -133,6 +140,7 @@ async function loadPSWs() {
     document.getElementById('stat-psws').textContent = data.total || 0;
     document.getElementById('stat-approved').textContent = data.psws?.filter(p => p.profile?.approvedByAdmin).length || 0;
   } catch (e) {
+    if (isSessionError(e)) return;
     console.error(e);
     showToast('Failed to load PSW list: ' + e.message, 'error');
     document.querySelector('#psw-table tbody').innerHTML = '<tr><td colspan="6" class="loading error-text">Failed to load. Try refreshing.</td></tr>';
@@ -278,6 +286,7 @@ async function loadDocuments() {
     const data = await apiCall(`/admin/documents${query}`);
     renderDocuments(data.documents || []);
   } catch (e) {
+    if (isSessionError(e)) return;
     console.error(e);
     showToast('Failed to load documents: ' + e.message, 'error');
     document.querySelector('#documents-table tbody').innerHTML = '<tr><td colspan="6" class="loading error-text">Failed to load. Try refreshing.</td></tr>';
@@ -395,6 +404,7 @@ async function loadBookings() {
     renderBookings(data.bookings || []);
     document.getElementById('stat-bookings').textContent = data.total || 0;
   } catch (e) {
+    if (isSessionError(e)) return;
     console.error(e);
     showToast('Failed to load bookings: ' + e.message, 'error');
     document.querySelector('#bookings-table tbody').innerHTML = '<tr><td colspan="6" class="loading error-text">Failed to load. Try refreshing.</td></tr>';
@@ -426,6 +436,7 @@ async function loadAudit() {
     const data = await apiCall('/admin/audit-logs?limit=100');
     renderAudit(data.logs || []);
   } catch (e) {
+    if (isSessionError(e)) return;
     console.error(e);
     showToast('Failed to load audit logs: ' + e.message, 'error');
     document.querySelector('#audit-table tbody').innerHTML = '<tr><td colspan="4" class="loading error-text">Failed to load. Try refreshing.</td></tr>';
@@ -519,8 +530,9 @@ document.getElementById('reject-psw-modal-btn').addEventListener('click', reject
       document.getElementById('admin-name').textContent = data.admin.username;
       showScreen('admin-screen');
       showPage('dashboard');
-    } catch {
-      logout();
+    } catch (e) {
+      // 401 already called logout() with the "Session expired" message — don't call it again
+      if (!isSessionError(e)) logout();
     }
   } else {
     showScreen('login-screen');

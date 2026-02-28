@@ -79,7 +79,7 @@ router.post(
       const token = jwt.sign(
         { adminId: admin._id, role: admin.role },
         JWT_SECRET,
-        { expiresIn: '24h' }
+        { expiresIn: '7d' }
       );
 
       await logAudit(admin._id, 'ADMIN_LOGIN', null, null, { username: admin.username }, req);
@@ -87,7 +87,7 @@ router.post(
       res.json({
         token,
         admin: admin.toJSON(),
-        expiresIn: 86400,
+        expiresIn: 604800,
       });
     } catch (err) {
       console.error('Admin login error:', err);

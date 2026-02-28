@@ -115,7 +115,7 @@ export function JobDetailScreen() {
             ['📅 Date', formatDate(job.scheduledAt)],
             ['⏰ Start Time', formatTime(job.scheduledAt)],
             ['⏱ Duration', `${job.hours} hours`],
-            ['📍 Location', 'Greater Sudbury, ON'],
+            ['📍 Address', job.address || 'Greater Sudbury, ON'],
             ['💰 Pay', `$${job.totalPrice} total ($${hourlyRate}/hr)`],
           ].map(([label, value]) => (
             <View key={label} style={styles.detailRow}>
