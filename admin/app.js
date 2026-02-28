@@ -4,6 +4,7 @@ let token = localStorage.getItem('adminToken');
 let currentPage = 'dashboard';
 let currentDoc = null;
 let currentPSW = null;
+let _loggingOut = false;  // guard against concurrent logout calls
 
 // Decode the exp claim from a JWT without verifying signature (client-side only)
 function parseJwtExpiry(tok) {
@@ -43,7 +44,10 @@ async function apiCall(endpoint, options = {}) {
     if (endpoint === '/admin/login') {
       throw new Error(data.error || 'Invalid credentials');
     }
-    logout((data.error || 'Session expired') + '. Please sign in again.');
+    // Only call logout once even if multiple in-flight requests all get 401
+    if (!_loggingOut) {
+      logout((data.error || 'Session expired') + '. Please sign in again.');
+    }
     throw new Error('__session_expired__');
   }
 
@@ -63,11 +67,17 @@ async function login(username, password) {
 }
 
 function logout(message) {
+  _loggingOut = true;
   token = null;
   localStorage.removeItem('adminToken');
+  // Clear the password field so user doesn't have to clear it manually
+  const pwField = document.getElementById('password');
+  if (pwField) pwField.value = '';
   showScreen('login-screen');
   const errEl = document.getElementById('login-error');
-  if (errEl) errEl.textContent = message || '';
+  if (errEl) errEl.textContent = (typeof message === 'string' ? message : '') || '';
+  // Allow future logout calls after a short delay (prevents rapid re-triggers)
+  setTimeout(() => { _loggingOut = false; }, 500);
 }
 
 function isSessionError(e) {
@@ -497,7 +507,10 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
-  
+  // Clear any previous error and reset logout guard before attempting login
+  document.getElementById('login-error').textContent = '';
+  _loggingOut = false;
+
   try {
     const data = await login(username, password);
     document.getElementById('admin-name').textContent = data.admin.username;
@@ -508,7 +521,7 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   }
 });
 
-document.getElementById('logout-btn').addEventListener('click', logout);
+document.getElementById('logout-btn').addEventListener('click', () => logout());
 
 document.querySelectorAll('.sidebar nav a').forEach(a => {
   a.addEventListener('click', (e) => {
