@@ -6,6 +6,7 @@ const KEYS = {
   PHOTO_URI: '@carenearby/photo_uri',
   DOCUMENTS: '@carenearby/documents',
   LANG: '@carenearby/lang',
+  INSTALL_DISMISSED: '@carenearby/install_dismissed',
 } as const;
 
 export interface StoredDocument {
@@ -89,5 +90,14 @@ export const Storage = {
 
   async getLang(): Promise<string | null> {
     return AsyncStorage.getItem(KEYS.LANG);
+  },
+
+  async saveInstallDismissed(): Promise<void> {
+    await AsyncStorage.setItem(KEYS.INSTALL_DISMISSED, '1');
+  },
+
+  async getInstallDismissed(): Promise<boolean> {
+    const v = await AsyncStorage.getItem(KEYS.INSTALL_DISMISSED);
+    return v === '1';
   },
 };

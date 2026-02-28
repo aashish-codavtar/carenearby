@@ -183,8 +183,9 @@ export function HomeScreen() {
   const [bookings,      setBookings]      = useState<Booking[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [refreshing,    setRefreshing]    = useState(false);
-  const [lang,          setLang]          = useState<'en' | 'fr'>('en');
-  const [photoUri,      setPhotoUri]      = useState<string | null>(null);
+  const [lang,        setLang]        = useState<'en' | 'fr'>('en');
+  const [photoUri,    setPhotoUri]    = useState<string | null>(null);
+  const [showIOSHint, setShowIOSHint] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const t              = T[lang];
@@ -213,6 +214,20 @@ export function HomeScreen() {
   // Load persisted language preference on mount
   useEffect(() => { Storage.getLang().then(l => { if (l === 'en' || l === 'fr') setLang(l as 'en' | 'fr'); }); }, []);
 
+  // iOS/iPadOS: show a one-time hint to use Share → Add to Home Screen.
+  // Android Chrome shows its own native mini-infobar automatically.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const isStandalone = (window.navigator as any).standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+    if (isStandalone) return;
+    const ua = navigator.userAgent;
+    const isIOS = (/iphone|ipad|ipod/i.test(ua) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) &&
+      !(window as any).MSStream;
+    if (!isIOS) return;
+    Storage.getInstallDismissed().then(dismissed => { if (!dismissed) setShowIOSHint(true); });
+  }, []);
+
   useEffect(() => {
     const pulse = Animated.loop(
       Animated.sequence([
@@ -223,6 +238,8 @@ export function HomeScreen() {
     pulse.start();
     return () => pulse.stop();
   }, []);
+
+  function dismissIOSHint() { Storage.saveInstallDismissed(); setShowIOSHint(false); }
 
   const locale    = lang === 'fr' ? 'fr-CA' : 'en-CA';
   const firstName = user?.name?.split(' ')[0] ?? (lang === 'fr' ? 'là' : 'there');
@@ -488,6 +505,20 @@ export function HomeScreen() {
           ))
         )}
 
+        {/* ── iOS install hint ── */}
+        {showIOSHint && (
+          <View style={styles.iosHint}>
+            <Text style={styles.iosHintText}>
+              {lang === 'fr'
+                ? "Appuyez sur Partager ⎙ puis « Ajouter à l'écran d'accueil » pour installer l'appli"
+                : 'Tap Share ⎙ → "Add to Home Screen" to install the app'}
+            </Text>
+            <Pressable onPress={dismissIOSHint} style={styles.iosHintDismiss} hitSlop={12}>
+              <Text style={styles.iosHintDismissText}>✕</Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* ── Footer ── */}
         <View style={styles.footer}>
           <Text style={styles.footerLogo}>CareNearby</Text>
@@ -651,6 +682,17 @@ const styles = StyleSheet.create({
     paddingVertical: 13, paddingHorizontal: 24,
   },
   emptyBookBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+
+  // iOS install hint
+  iosHint: {
+    flexDirection: 'row', alignItems: 'center',
+    marginHorizontal: 16, marginBottom: 12,
+    backgroundColor: '#F0F7FF', borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: '#BFDBFE', gap: 10,
+  },
+  iosHintText:        { flex: 1, fontSize: 13, color: '#1E40AF', lineHeight: 18 },
+  iosHintDismiss:     { padding: 4 },
+  iosHintDismissText: { color: '#93C5FD', fontSize: 16, fontWeight: '700' },
 
   // Footer
   footer: {

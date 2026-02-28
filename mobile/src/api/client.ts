@@ -117,8 +117,12 @@ export function apiToggleAvailability(available: boolean) {
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
-export function apiGetProfile() {
-  return request<{ user: UserProfile }>('GET', '/profile');
+export async function apiGetProfile(): Promise<{ user: UserProfile }> {
+  // Backend returns { user: {...}, pswProfile: {...} } as separate top-level fields.
+  // Merge pswProfile into user so callers can access user.pswProfile correctly.
+  const raw = await request<{ user: Record<string, any>; pswProfile?: Record<string, any> | null }>('GET', '/profile');
+  if (raw.pswProfile) (raw.user as any).pswProfile = raw.pswProfile;
+  return { user: raw.user as UserProfile };
 }
 
 export function apiUpdateProfile(payload: {
@@ -144,15 +148,23 @@ export async function apiUploadDocument(payload: { docType: string; label: strin
   form.append('label', payload.label);
 
   if (payload.dataUrl) {
-    // Convert base64 dataUrl → Blob → append as file
-    const mime = payload.mimeType ?? payload.dataUrl.split(';')[0].split(':')[1] ?? 'image/jpeg';
-    const b64  = payload.dataUrl.includes(',') ? payload.dataUrl.split(',')[1] : payload.dataUrl;
-    const binary = atob(b64);
-    const bytes  = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const blob = new Blob([bytes], { type: mime });
-    const name = payload.fileName ?? `doc_${Date.now()}.${mime.split('/')[1] || 'jpg'}`;
-    form.append('file', blob, name);
+    let fileBlob: Blob;
+    // Safari on iOS/iPad often returns a blob:// URI instead of a base64 data URL.
+    // For blob:// or http(s):// URIs, fetch the resource directly.
+    if (payload.dataUrl.startsWith('blob:') || payload.dataUrl.startsWith('http:') || payload.dataUrl.startsWith('https:')) {
+      const resp = await fetch(payload.dataUrl);
+      fileBlob = await resp.blob();
+    } else {
+      // Standard base64 data URL (data:image/jpeg;base64,...)
+      const mime = payload.mimeType ?? payload.dataUrl.split(';')[0].split(':')[1] ?? 'image/jpeg';
+      const b64  = payload.dataUrl.includes(',') ? payload.dataUrl.split(',')[1] : payload.dataUrl;
+      const binary = atob(b64);
+      const bytes  = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      fileBlob = new Blob([bytes], { type: mime });
+    }
+    const name = payload.fileName ?? `doc_${Date.now()}.${(fileBlob.type || payload.mimeType || 'image/jpeg').split('/')[1] || 'jpg'}`;
+    form.append('file', fileBlob, name);
   }
 
   const res = await fetch(`${API_BASE}/documents/upload`, { method: 'POST', headers, body: form });
