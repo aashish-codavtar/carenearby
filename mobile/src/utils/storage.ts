@@ -5,6 +5,7 @@ const KEYS = {
   USER: '@carenearby/user',
   PHOTO_URI: '@carenearby/photo_uri',
   DOCUMENTS: '@carenearby/documents',
+  LANG: '@carenearby/lang',
 } as const;
 
 export interface StoredDocument {
@@ -76,5 +77,17 @@ export const Storage = {
   async removeDocument(id: string): Promise<void> {
     const docs = await Storage.getDocuments();
     await AsyncStorage.setItem(KEYS.DOCUMENTS, JSON.stringify(docs.filter(d => d.id !== id)));
+  },
+
+  async clearDocuments(): Promise<void> {
+    await AsyncStorage.removeItem(KEYS.DOCUMENTS);
+  },
+
+  async saveLang(lang: string): Promise<void> {
+    await AsyncStorage.setItem(KEYS.LANG, lang);
+  },
+
+  async getLang(): Promise<string | null> {
+    return AsyncStorage.getItem(KEYS.LANG);
   },
 };

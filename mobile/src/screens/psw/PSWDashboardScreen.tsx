@@ -124,6 +124,15 @@ export function PSWDashboardScreen() {
 
   useFocusEffect(useCallback(() => { load(); Storage.getPhotoUri().then(setPhotoUri); }, [load]));
 
+  // Load persisted language preference on mount
+  useEffect(() => { Storage.getLang().then(l => { if (l === 'en' || l === 'fr') setLang(l as Lang); }); }, []);
+
+  // Poll every 15s so the pending-approval banner disappears automatically after admin approves
+  useEffect(() => {
+    const timer = setInterval(() => load(), 15_000);
+    return () => clearInterval(timer);
+  }, [load]);
+
   useEffect(() => {
     if (isOnline) {
       const pulse = Animated.loop(
@@ -185,7 +194,7 @@ export function PSWDashboardScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Pressable
               style={styles.langToggle}
-              onPress={() => setLang(l => l === 'en' ? 'fr' : 'en')}
+              onPress={() => { const next = lang === 'en' ? 'fr' : 'en'; setLang(next); Storage.saveLang(next); }}
             >
               <Text style={styles.langToggleText}>{lang === 'en' ? 'FR' : 'EN'}</Text>
             </Pressable>

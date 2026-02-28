@@ -81,6 +81,8 @@ function WebLeafletMap({ center, jobs, onJobPress, onAcceptJob, filterText }: We
         zoomControl: true,
         attributionControl: true,
       }).setView([center.lat, center.lng], 12);
+      // Ensure Leaflet calculates correct dimensions after React layout settles
+      setTimeout(() => { if (mapRef.current) mapRef.current.invalidateSize(); }, 300);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© <a href="https://openstreetmap.org">OSM</a>',
@@ -160,7 +162,7 @@ function WebLeafletMap({ center, jobs, onJobPress, onAcceptJob, filterText }: We
   return (
     <View style={styles.mapContainer}>
       {/* @ts-ignore – ref to real DOM div on web */}
-      <div ref={containerRef} style={{ width: '100%', flex: 1 }} />
+      <div ref={containerRef} style={{ width: '100%', height: '100%', minHeight: 300 }} />
       {/* Locate me button */}
       <Pressable style={styles.locateBtn} onPress={handleLocateMe}>
         <Text style={styles.locateBtnText}>📍</Text>

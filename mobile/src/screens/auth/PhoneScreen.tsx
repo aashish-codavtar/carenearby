@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   // Form
   formContainer: { flex: 1 },
   scrollView: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingBottom: 20 },
+  scrollContent: { flexGrow: 1, paddingBottom: 20, backgroundColor: '#fff' },
   formCard: {
     backgroundColor: '#fff',
     borderTopLeftRadius: 24, borderTopRightRadius: 24,

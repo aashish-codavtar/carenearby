@@ -39,7 +39,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    await Storage.clearAuth();
+    await Promise.all([
+      Storage.clearAuth(),
+      Storage.clearPhotoUri(),
+      Storage.clearDocuments(),
+    ]);
     setState({ token: null, user: null, isLoading: false });
   }, []);
 

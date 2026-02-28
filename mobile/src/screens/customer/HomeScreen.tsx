@@ -53,12 +53,6 @@ const T = {
     activeBooking:  'Active Booking',
     trustLabel:      'TRUST',
     trustTitle:      'Why CareNearby?',
-    installTitle:    'Install CareNearby App',
-    installSub:      'Add to home screen for quick access',
-    installBtn:      'Install',
-    iosInstallTitle: 'Install on iPhone / iPad',
-    iosInstallSub:   'Tap',
-    iosInstallSub2:  'then "Add to Home Screen"',
   },
   fr: {
     greeting:       (h: number) => h < 12 ? 'Bonjour' : h < 17 ? 'Bon après-midi' : 'Bonsoir',
@@ -90,12 +84,6 @@ const T = {
     activeBooking:  'Réservation active',
     trustLabel:      'CONFIANCE',
     trustTitle:      'Pourquoi CareNearby ?',
-    installTitle:    "Installer l'appli CareNearby",
-    installSub:      "Ajouter à l'écran d'accueil",
-    installBtn:      'Installer',
-    iosInstallTitle: "Installer sur iPhone / iPad",
-    iosInstallSub:   'Appuyez sur',
-    iosInstallSub2:  'puis « Ajouter à l\'écran d\'accueil »',
   },
 };
 
@@ -197,8 +185,6 @@ export function HomeScreen() {
   const [refreshing,    setRefreshing]    = useState(false);
   const [lang,          setLang]          = useState<'en' | 'fr'>('en');
   const [photoUri,      setPhotoUri]      = useState<string | null>(null);
-  const [installPrompt, setInstallPrompt] = useState<any>(null);  // Android deferred prompt
-  const [showIOSHint,   setShowIOSHint]   = useState(false);       // iOS share-sheet hint
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const t              = T[lang];
@@ -224,35 +210,8 @@ export function HomeScreen() {
     Storage.getPhotoUri().then(uri => setPhotoUri(uri ?? null));
   }, []));
 
-  // PWA install detection (web only)
-  useEffect(() => {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-    const isStandalone =
-      (window.navigator as any).standalone === true ||
-      window.matchMedia('(display-mode: standalone)').matches;
-    if (isStandalone) return; // already installed
-
-    // Android / Chrome: listen for native install prompt
-    const handler = (e: any) => { e.preventDefault(); setInstallPrompt(e); };
-    window.addEventListener('beforeinstallprompt', handler);
-
-    // iOS Safari: no beforeinstallprompt — show manual instructions instead
-    // iPadOS 13+ reports as "MacIntel" in desktop mode, so also check maxTouchPoints
-    const ua = navigator.userAgent;
-    const isIOS = (/iphone|ipad|ipod/i.test(ua) ||
-      (typeof navigator.platform !== 'undefined' && navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) &&
-      !(window as any).MSStream;
-    if (isIOS) setShowIOSHint(true);
-
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
-
-  async function triggerInstall() {
-    if (!installPrompt) return;
-    installPrompt.prompt();
-    const { outcome } = await installPrompt.userChoice;
-    if (outcome === 'accepted') setInstallPrompt(null);
-  }
+  // Load persisted language preference on mount
+  useEffect(() => { Storage.getLang().then(l => { if (l === 'en' || l === 'fr') setLang(l as 'en' | 'fr'); }); }, []);
 
   useEffect(() => {
     const pulse = Animated.loop(
@@ -303,7 +262,7 @@ export function HomeScreen() {
             <View style={styles.heroActions}>
               <Pressable
                 style={({ pressed }) => [styles.langToggle, pressed && { opacity: 0.75 }]}
-                onPress={() => setLang(l => l === 'en' ? 'fr' : 'en')}
+                onPress={() => { const next = lang === 'en' ? 'fr' : 'en'; setLang(next); Storage.saveLang(next); }}
               >
                 <Text style={styles.langToggleText}>{lang === 'en' ? 'FR' : 'EN'}</Text>
               </Pressable>
@@ -529,36 +488,6 @@ export function HomeScreen() {
           ))
         )}
 
-        {/* ── Android / Chrome install banner ── */}
-        {installPrompt && (
-          <Pressable style={styles.installBanner} onPress={triggerInstall}>
-            <View style={styles.installBannerLeft}>
-              <Text style={styles.installBannerIcon}>📲</Text>
-              <View>
-                <Text style={styles.installBannerTitle}>{t.installTitle}</Text>
-                <Text style={styles.installBannerSub}>{t.installSub}</Text>
-              </View>
-            </View>
-            <Text style={styles.installBannerBtn}>{t.installBtn}</Text>
-          </Pressable>
-        )}
-
-        {/* ── iOS Safari install hint (also covers iPadOS 13+ desktop mode) ── */}
-        {showIOSHint && (
-          <View style={styles.installBanner}>
-            <View style={styles.installBannerLeft}>
-              <Text style={styles.installBannerIcon}>📲</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.installBannerTitle}>{t.iosInstallTitle}</Text>
-                <Text style={styles.installBannerSub}>{t.iosInstallSub} <Text style={{ fontWeight: '700' }}>Share ⎙</Text> {t.iosInstallSub2}</Text>
-              </View>
-            </View>
-            <Pressable onPress={() => setShowIOSHint(false)} style={styles.installDismiss}>
-              <Text style={styles.installDismissText}>✕</Text>
-            </Pressable>
-          </View>
-        )}
-
         {/* ── Footer ── */}
         <View style={styles.footer}>
           <Text style={styles.footerLogo}>CareNearby</Text>
@@ -722,25 +651,6 @@ const styles = StyleSheet.create({
     paddingVertical: 13, paddingHorizontal: 24,
   },
   emptyBookBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-
-  // Install banner
-  installBanner: {
-    marginHorizontal: 16, marginBottom: 12,
-    backgroundColor: '#0A1628', borderRadius: 16, padding: 16,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 6,
-  },
-  installBannerLeft:  { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  installBannerIcon:  { fontSize: 28 },
-  installBannerTitle: { fontSize: 14, fontWeight: '700', color: '#fff', marginBottom: 2 },
-  installBannerSub:   { fontSize: 12, color: 'rgba(255,255,255,0.65)', flexShrink: 1 },
-  installBannerBtn: {
-    backgroundColor: '#007AFF', borderRadius: 10,
-    paddingHorizontal: 14, paddingVertical: 8,
-    color: '#fff', fontSize: 13, fontWeight: '700', overflow: 'hidden',
-  },
-  installDismiss:     { padding: 6 },
-  installDismissText: { color: 'rgba(255,255,255,0.5)', fontSize: 16, fontWeight: '600' },
 
   // Footer
   footer: {
