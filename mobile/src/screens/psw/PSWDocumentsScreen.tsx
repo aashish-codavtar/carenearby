@@ -81,16 +81,19 @@ export function PSWDocumentsScreen() {
         if (!result.canceled && result.assets[0]) {
           const asset = result.assets[0];
           // Build data URL: on web the uri may already be blob:// so we use base64
+          const mimeType = asset.mimeType ?? 'image/jpeg';
           const dataUrl = asset.base64
-            ? `data:image/jpeg;base64,${asset.base64}`
+            ? `data:${mimeType};base64,${asset.base64}`
             : asset.uri;   // fallback (web sometimes returns data URL directly)
 
-          const doc: StoredDocument & { dataUrl?: string } = {
+          const doc: StoredDocument & { dataUrl?: string; mimeType?: string; fileName?: string } = {
             id:         docType.id,
             label:      docType.label,
             uri:        asset.uri,
             uploadedAt: new Date().toISOString(),
             dataUrl,
+            mimeType,
+            fileName: asset.fileName ?? `${docType.id}_${Date.now()}.jpg`,
           };
           await Storage.saveDocument(doc as StoredDocument);
           const updated = await Storage.getDocuments();
@@ -142,8 +145,10 @@ export function PSWDocumentsScreen() {
 
       for (const doc of docs) {
         try {
-          const dataUrl = (doc as any).dataUrl || doc.uri;
-          await apiUploadDocument({ docType: doc.id, label: doc.label, dataUrl });
+          const dataUrl  = (doc as any).dataUrl  || doc.uri;
+          const mimeType = (doc as any).mimeType ?? 'image/jpeg';
+          const fileName = (doc as any).fileName ?? `${doc.id}_${Date.now()}.jpg`;
+          await apiUploadDocument({ docType: doc.id, label: doc.label, dataUrl, mimeType, fileName });
           successCount++;
         } catch {
           failCount++;

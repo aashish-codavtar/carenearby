@@ -8,6 +8,7 @@ import { NearbyJobsScreen } from '../screens/psw/NearbyJobsScreen';
 import { MyJobsScreen } from '../screens/psw/MyJobsScreen';
 import { EarningsScreen } from '../screens/psw/EarningsScreen';
 import { PSWDashboardScreen } from '../screens/psw/PSWDashboardScreen';
+import { PSWDocumentsScreen } from '../screens/psw/PSWDocumentsScreen';
 import { PSWOnboardingScreen } from '../screens/psw/PSWOnboardingScreen';
 import { HelpScreen } from '../screens/shared/HelpScreen';
 import { ProfileScreen } from '../screens/shared/ProfileScreen';
@@ -18,6 +19,7 @@ export type PSWStackParams = {
   PSWHome: undefined;
   PSWOnboarding: undefined;
   JobDetail: { job: Booking };
+  PSWDocuments: undefined;
   Help: undefined;
 };
 
@@ -112,6 +114,7 @@ export function PSWNavigator() {
       <Stack.Screen name="PSWHome" component={PSWTabs} options={{ headerShown: false }} />
       <Stack.Screen name="PSWOnboarding" component={PSWOnboardingScreen} options={{ headerShown: false, gestureEnabled: false }} />
       <Stack.Screen name="JobDetail" component={JobDetailScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="PSWDocuments" component={PSWDocumentsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Help" component={HelpScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );

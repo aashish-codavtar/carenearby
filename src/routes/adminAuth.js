@@ -79,7 +79,7 @@ router.post(
       const token = jwt.sign(
         { adminId: admin._id, role: admin.role },
         JWT_SECRET,
-        { expiresIn: '7d' }
+        { expiresIn: '30d' }
       );
 
       await logAudit(admin._id, 'ADMIN_LOGIN', null, null, { username: admin.username }, req);

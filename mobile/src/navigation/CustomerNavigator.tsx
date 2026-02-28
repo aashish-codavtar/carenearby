@@ -1,7 +1,8 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import React from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Image, Platform, StyleSheet, Text, View } from 'react-native';
+import { Storage } from '../utils/storage';
 import { BookingDetailScreen } from '../screens/customer/BookingDetailScreen';
 import { BookingsScreen } from '../screens/customer/BookingsScreen';
 import { CreateBookingScreen } from '../screens/customer/CreateBookingScreen';
@@ -33,11 +34,33 @@ function TabIcon({ emoji, focused, color, label }: TabIconProps) {
   );
 }
 
+function ProfileTabIcon({ focused, color }: { focused: boolean; color: string }) {
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+
+  useEffect(() => {
+    Storage.getPhotoUri().then(setPhotoUri);
+  }, [focused]); // reload each time this tab gains focus
+
+  return (
+    <View style={tabStyles.iconWrap}>
+      <View style={[tabStyles.iconBubble, focused && { backgroundColor: Colors.systemBlue + '15' }]}>
+        {photoUri ? (
+          <Image source={{ uri: photoUri }} style={tabStyles.profileImg} />
+        ) : (
+          <Text style={[tabStyles.emoji, { opacity: focused ? 1 : 0.5 }]}>👤</Text>
+        )}
+      </View>
+      <Text style={[tabStyles.label, { color: focused ? Colors.systemBlue : Colors.systemGray2 }]}>Profile</Text>
+    </View>
+  );
+}
+
 const tabStyles = StyleSheet.create({
   iconWrap:   { alignItems: 'center', gap: 2, paddingTop: 6 },
   iconBubble: { width: 44, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   emoji:      { fontSize: 20 },
   label:      { fontSize: 10, fontWeight: '600', letterSpacing: 0.2 },
+  profileImg: { width: 24, height: 24, borderRadius: 12 },
 });
 
 function HomeTabs() {
@@ -80,7 +103,7 @@ function HomeTabs() {
       <Tab.Screen
         name="ProfileTab"
         component={ProfileScreen}
-        options={{ tabBarIcon: ({ focused, color }) => <TabIcon emoji="👤" label="Profile" focused={focused} color={color} /> }}
+        options={{ tabBarIcon: ({ focused, color }) => <ProfileTabIcon focused={focused} color={color} /> }}
       />
     </Tab.Navigator>
   );

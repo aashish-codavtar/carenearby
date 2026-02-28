@@ -34,6 +34,53 @@ const router = express.Router();
 
 const HOURLY_RATE = () => parseFloat(process.env.HOURLY_RATE) || 25; // CAD
 
+// ── GET /psws/available ───────────────────────────────────────────────────────
+// Returns approved + available PSWs with their coordinates so customers can
+// see coverage before booking. Excludes PSWs without a set location.
+router.get(
+  '/psws/available',
+  authenticate,
+  requireRole('CUSTOMER'),
+  async (req, res) => {
+    try {
+      const profiles = await PSWProfile.find({
+        approvedByAdmin: true,
+        availability:    true,
+      }).select('userId qualificationType').lean();
+
+      if (!profiles.length) return res.json({ count: 0, psws: [] });
+
+      const userIds    = profiles.map(p => p.userId);
+      const profileMap = Object.fromEntries(profiles.map(p => [p.userId.toString(), p]));
+
+      const pswUsers = await User.find({
+        _id:        { $in: userIds },
+        role:       'PSW',
+        isVerified: true,
+      }).select('name rating location').lean();
+
+      const result = pswUsers
+        .filter(u =>
+          u.location?.coordinates &&
+          (u.location.coordinates[0] !== 0 || u.location.coordinates[1] !== 0)
+        )
+        .map(u => ({
+          _id:               u._id,
+          name:              u.name,
+          rating:            u.rating || 0,
+          lat:               u.location.coordinates[1],
+          lng:               u.location.coordinates[0],
+          qualificationType: profileMap[u._id.toString()]?.qualificationType || 'PSW',
+        }));
+
+      res.json({ count: result.length, psws: result });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
 // ── POST /bookings ────────────────────────────────────────────────────────────
 // Create a new care booking.
 // Minimum 3 hours; price is computed server-side from HOURLY_RATE.

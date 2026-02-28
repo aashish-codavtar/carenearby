@@ -3,12 +3,13 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
-  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -23,14 +24,14 @@ import {
 } from '../../api/client';
 import { Colors } from '../../utils/colors';
 
-// ── Doc type icons ─────────────────────────────────────────────────────────────
-const DOC_ICONS: Record<string, string> = {
-  police_check:    '🛡️',
-  psw_certificate: '🏅',
-  first_aid:       '🚑',
-  drivers_license: '🚗',
-  id_card:         '🪪',
-  insurance:       '📄',
+// ── Doc type icons + labels ────────────────────────────────────────────────────
+const DOC_META: Record<string, { icon: string; label: string; required: boolean }> = {
+  police_check:    { icon: '🛡️', label: 'Police Check Clearance',      required: true },
+  psw_certificate: { icon: '🏅', label: 'PSW Certificate',             required: true },
+  first_aid:       { icon: '🚑', label: 'First Aid / CPR Certificate', required: true },
+  drivers_license: { icon: '🚗', label: "Driver's Licence",            required: false },
+  id_card:         { icon: '🪪', label: 'Government ID',               required: false },
+  insurance:       { icon: '📄', label: 'Liability Insurance',         required: false },
 };
 
 function Divider() {
@@ -47,15 +48,42 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
   );
 }
 
+// ── Full-screen image viewer modal ────────────────────────────────────────────
+function ImageViewer({
+  uri, label, visible, onClose,
+}: { uri: string; label: string; visible: boolean; onClose: () => void }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={viewer.overlay}>
+        <Pressable style={viewer.closeBtn} onPress={onClose}>
+          <Text style={viewer.closeTxt}>✕ Close</Text>
+        </Pressable>
+        <Text style={viewer.label}>{label}</Text>
+        <Image source={{ uri }} style={viewer.image} resizeMode="contain" />
+      </View>
+    </Modal>
+  );
+}
+
+const viewer = StyleSheet.create({
+  overlay:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', alignItems: 'center', justifyContent: 'center', padding: 16 },
+  closeBtn: { position: 'absolute', top: 56, right: 20, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 },
+  closeTxt: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  label:    { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 16, textAlign: 'center' },
+  image:    { width: '100%', height: '75%', borderRadius: 12 },
+});
+
 export function AdminPSWDetailScreen() {
   const nav    = useNavigation<any>();
   const route  = useRoute<any>();
   const insets = useSafeAreaInsets();
   const { pswId } = route.params as { pswId: string };
 
-  const [psw,      setPSW]      = useState<PSWEntry | null>(null);
-  const [loading,  setLoading]  = useState(true);
-  const [actingOn, setActingOn] = useState<string | null>(null);
+  const [psw,       setPSW]       = useState<PSWEntry | null>(null);
+  const [loading,   setLoading]   = useState(true);
+  const [actingOn,  setActingOn]  = useState<string | null>(null);
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
+  const [viewerLbl, setViewerLbl] = useState('');
 
   async function load() {
     try {
@@ -67,10 +95,12 @@ export function AdminPSWDetailScreen() {
 
   useEffect(() => { load(); }, []);
 
-  const isApproved      = psw?.profile?.approvedByAdmin ?? false;
-  const policeCleared   = psw?.profile?.policeCheckCleared ?? false;
-  const docs            = psw?.profile?.submittedDocuments ?? [];
-  const verifiedDocCount = docs.filter(d => d.verifiedByAdmin).length;
+  const isApproved     = psw?.profile?.approvedByAdmin ?? false;
+  const policeCleared  = psw?.profile?.policeCheckCleared ?? false;
+  const docs           = psw?.profile?.submittedDocuments ?? [];
+  const verifiedCount  = docs.filter(d => d.verifiedByAdmin).length;
+  const requiredDocs   = Object.entries(DOC_META).filter(([, m]) => m.required).map(([k]) => k);
+  const allRequiredIn  = requiredDocs.every(k => docs.find(d => d.docType === k));
 
   async function handleApprove() {
     const doIt = async () => {
@@ -79,7 +109,7 @@ export function AdminPSWDetailScreen() {
         await apiApprovePSW(pswId);
         await load();
       } catch (e: any) {
-        const msg = e.message || 'Could not approve';
+        const msg = (e as any).message || 'Could not approve';
         if (Platform.OS === 'web') alert(msg); else Alert.alert('Error', msg);
       }
       setActingOn(null);
@@ -87,7 +117,7 @@ export function AdminPSWDetailScreen() {
     if (Platform.OS === 'web') {
       if (window.confirm(`Approve ${psw?.name} as a verified PSW?`)) doIt();
     } else {
-      Alert.alert('Approve PSW', `Approve ${psw?.name} as a verified PSW?`, [
+      Alert.alert('Approve PSW', `Approve ${psw?.name}?`, [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Approve', onPress: doIt },
       ]);
@@ -101,7 +131,7 @@ export function AdminPSWDetailScreen() {
         await apiRejectPSW(pswId);
         await load();
       } catch (e: any) {
-        const msg = e.message || 'Could not reject';
+        const msg = (e as any).message || 'Could not reject';
         if (Platform.OS === 'web') alert(msg); else Alert.alert('Error', msg);
       }
       setActingOn(null);
@@ -122,7 +152,7 @@ export function AdminPSWDetailScreen() {
       await apiVerifyDocument(pswId, { docType, verified });
       await load();
     } catch (e: any) {
-      const msg = e.message || 'Could not update';
+      const msg = (e as any).message || 'Could not update';
       if (Platform.OS === 'web') alert(msg); else Alert.alert('Error', msg);
     }
     setActingOn(null);
@@ -134,7 +164,7 @@ export function AdminPSWDetailScreen() {
       await apiTogglePoliceCheck(pswId, cleared);
       await load();
     } catch (e: any) {
-      const msg = e.message || 'Could not update';
+      const msg = (e as any).message || 'Could not update';
       if (Platform.OS === 'web') alert(msg); else Alert.alert('Error', msg);
     }
     setActingOn(null);
@@ -144,6 +174,7 @@ export function AdminPSWDetailScreen() {
     return (
       <View style={[styles.centered, { paddingTop: insets.top }]}>
         <ActivityIndicator size="large" color={Colors.systemPurple} />
+        <Text style={styles.loadingText}>Loading PSW details…</Text>
       </View>
     );
   }
@@ -163,9 +194,19 @@ export function AdminPSWDetailScreen() {
 
   return (
     <View style={styles.container}>
+      {/* ── Full-screen image viewer ─────────────────────────────── */}
+      {viewerUri && (
+        <ImageViewer
+          uri={viewerUri}
+          label={viewerLbl}
+          visible={!!viewerUri}
+          onClose={() => setViewerUri(null)}
+        />
+      )}
+
       {/* ── Header ─────────────────────────────────────────────────── */}
       <LinearGradient
-        colors={['#3730A3', '#4F46E5', '#6D28D9']}
+        colors={['#1E1B4B', '#3730A3', '#4338CA']}
         style={[styles.header, { paddingTop: insets.top + 8 }]}
       >
         <Pressable style={styles.backBtn} onPress={() => nav.goBack()}>
@@ -184,7 +225,7 @@ export function AdminPSWDetailScreen() {
             <Text style={styles.heroName}>{psw.name}</Text>
             <Text style={styles.heroPhone}>{psw.phone}</Text>
             {(psw.ratingCount ?? 0) > 0 && (
-              <Text style={styles.heroRating}>⭐ {psw.rating?.toFixed(1)} ({psw.ratingCount} ratings)</Text>
+              <Text style={styles.heroRating}>⭐ {psw.rating?.toFixed(1)} · {psw.ratingCount} ratings</Text>
             )}
           </View>
           <View style={[styles.statusPill, { backgroundColor: isApproved ? '#16A34A' : '#EA580C' }]}>
@@ -196,17 +237,17 @@ export function AdminPSWDetailScreen() {
         <View style={styles.statsStrip}>
           <View style={styles.statItem}>
             <Text style={styles.statVal}>{docs.length}</Text>
-            <Text style={styles.statLabel}>Docs</Text>
+            <Text style={styles.statLabel}>Docs Submitted</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statVal}>{verifiedDocCount}</Text>
+            <Text style={styles.statVal}>{verifiedCount}</Text>
             <Text style={styles.statLabel}>Verified</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statVal}>{policeCleared ? '✅' : '⏳'}</Text>
-            <Text style={styles.statLabel}>Police</Text>
+            <Text style={styles.statLabel}>Police Check</Text>
           </View>
         </View>
       </LinearGradient>
@@ -215,158 +256,129 @@ export function AdminPSWDetailScreen() {
         contentContainerStyle={[styles.body, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Approve / Reject actions ──────────────────────────────── */}
+        {/* ── Approval banner / action buttons ─────────────────────── */}
+        {!allRequiredIn && docs.length === 0 && (
+          <View style={styles.noDocsBanner}>
+            <Text style={styles.noDocsBannerIcon}>⚠️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.noDocsBannerTitle}>No Documents Submitted Yet</Text>
+              <Text style={styles.noDocsBannerSub}>The PSW hasn't uploaded any credential documents from the app. You can still approve based on their onboarding profile below.</Text>
+            </View>
+          </View>
+        )}
+
+        {allRequiredIn && !isApproved && (
+          <View style={styles.readyBanner}>
+            <Text style={styles.readyBannerIcon}>✅</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.readyBannerTitle}>All 3 required documents received</Text>
+              <Text style={styles.readyBannerSub}>Review each document below, then approve this PSW.</Text>
+            </View>
+          </View>
+        )}
+
         <View style={styles.actionRow}>
           <Pressable
             style={[styles.approveBtn, isApproved && styles.approveBtnDone, actingOn === 'approve' && { opacity: 0.7 }]}
             onPress={handleApprove}
             disabled={actingOn !== null}
           >
-            {actingOn === 'approve' ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.approveBtnText}>{isApproved ? '✓ Approved' : '✅ Approve PSW'}</Text>
-            )}
+            {actingOn === 'approve'
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={styles.approveBtnText}>{isApproved ? '✓ PSW Approved' : '✅ Approve PSW'}</Text>
+            }
           </Pressable>
           <Pressable
             style={[styles.rejectBtn, actingOn === 'reject' && { opacity: 0.7 }]}
             onPress={handleReject}
             disabled={actingOn !== null}
           >
-            {actingOn === 'reject' ? (
-              <ActivityIndicator color="#DC2626" size="small" />
-            ) : (
-              <Text style={styles.rejectBtnText}>{isApproved ? '✗ Revoke' : '✗ Reject'}</Text>
-            )}
+            {actingOn === 'reject'
+              ? <ActivityIndicator color="#DC2626" size="small" />
+              : <Text style={styles.rejectBtnText}>{isApproved ? '✗ Revoke Approval' : '✗ Reject'}</Text>
+            }
           </Pressable>
         </View>
 
-        {/* ── Credential info ───────────────────────────────────────── */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Credentials</Text>
-          <View style={styles.card}>
-            <InfoRow icon="🏅" label="Qualification" value={psw.profile?.qualificationType ?? 'PSW'} />
-            {psw.profile?.experienceYears ? (
-              <>
-                <Divider />
-                <InfoRow icon="📅" label="Experience" value={`${psw.profile.experienceYears} years`} />
-              </>
-            ) : null}
-            {(psw.profile?.languages?.length ?? 0) > 0 && (
-              <>
-                <Divider />
-                <InfoRow icon="🌐" label="Languages" value={psw.profile!.languages!.join(', ')} />
-              </>
-            )}
-            {psw.profile?.firstAidCertified && (
-              <>
-                <Divider />
-                <InfoRow icon="🚑" label="First Aid" value="Certified" />
-              </>
-            )}
-            {psw.profile?.ownTransportation && (
-              <>
-                <Divider />
-                <InfoRow icon="🚗" label="Transport" value="Own vehicle" />
-              </>
-            )}
-          </View>
-        </View>
-
-        {/* ── Police Check toggle ───────────────────────────────────── */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Police Check</Text>
-          <View style={styles.card}>
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleLeft}>
-                <Text style={styles.toggleIcon}>🛡️</Text>
-                <View>
-                  <Text style={styles.toggleLabel}>Police Check Cleared</Text>
-                  <Text style={styles.toggleSub}>RCMP / OPP criminal record check</Text>
-                </View>
-              </View>
-              <Pressable
-                style={[
-                  styles.togglePill,
-                  policeCleared ? styles.togglePillOn : styles.togglePillOff,
-                  actingOn === 'police' && { opacity: 0.7 },
-                ]}
-                onPress={() => handlePoliceCheck(!policeCleared)}
-                disabled={actingOn !== null}
-              >
-                {actingOn === 'police' ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.togglePillText}>{policeCleared ? '✓ Cleared' : 'Not Cleared'}</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-
-        {/* ── Submitted Documents ───────────────────────────────────── */}
+        {/* ══════════════════════════════════════════════════════════════
+            DOCUMENTS — the main review section
+        ════════════════════════════════════════════════════════════════ */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
-            Submitted Documents ({docs.length}){' '}
-            {verifiedDocCount > 0 && `· ${verifiedDocCount} verified`}
+            Credential Documents · {docs.length} submitted · {verifiedCount} verified
           </Text>
 
           {docs.length === 0 ? (
             <View style={styles.emptyDocsCard}>
               <Text style={styles.emptyDocsIcon}>📭</Text>
-              <Text style={styles.emptyDocsText}>No documents submitted yet</Text>
-              <Text style={styles.emptyDocsSub}>The PSW has not uploaded any documents from the app</Text>
+              <Text style={styles.emptyDocsTitle}>No documents yet</Text>
+              <Text style={styles.emptyDocsSub}>
+                Once the PSW uploads their documents from the app (My Documents screen), they will appear here for you to review.
+              </Text>
             </View>
           ) : (
             docs.map(doc => {
-              const isVerified = doc.verifiedByAdmin;
-              const actionKey  = `doc_${doc.docType}`;
+              const meta      = DOC_META[doc.docType];
+              const isVerif   = doc.verifiedByAdmin;
+              const actionKey = `doc_${doc.docType}`;
+
               return (
-                <View key={doc.docType} style={[styles.docCard, isVerified && styles.docCardVerified]}>
-                  <View style={styles.docCardHeader}>
-                    <Text style={styles.docCardIcon}>{DOC_ICONS[doc.docType] ?? '📄'}</Text>
+                <View key={doc.docType} style={[styles.docCard, isVerif && styles.docCardVerified]}>
+                  {/* Doc header */}
+                  <View style={styles.docHeader}>
+                    <Text style={styles.docIcon}>{meta?.icon ?? '📄'}</Text>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.docCardLabel}>{doc.label || doc.docType}</Text>
-                      <Text style={styles.docCardDate}>
+                      <Text style={styles.docLabel}>{doc.label || meta?.label || doc.docType}</Text>
+                      <Text style={styles.docDate}>
                         Submitted {new Date(doc.submittedAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </Text>
-                      {isVerified && doc.verifiedAt && (
-                        <Text style={styles.docVerifiedDate}>
-                          ✅ Verified {new Date(doc.verifiedAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}
-                        </Text>
+                      {isVerif && doc.verifiedAt && (
+                        <Text style={styles.docVerifDate}>✅ Verified {new Date(doc.verifiedAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}</Text>
                       )}
                     </View>
-                    <View style={[styles.docStatusBadge, { backgroundColor: isVerified ? '#DCFCE7' : '#FEF3C7' }]}>
-                      <Text style={[styles.docStatusText, { color: isVerified ? '#16A34A' : '#92400E' }]}>
-                        {isVerified ? '✓ Verified' : '⏳ Pending'}
+                    <View style={[styles.docBadge, { backgroundColor: isVerif ? '#DCFCE7' : '#FEF3C7' }]}>
+                      <Text style={[styles.docBadgeText, { color: isVerif ? '#15803D' : '#92400E' }]}>
+                        {isVerif ? '✓ Verified' : '⏳ Review'}
                       </Text>
                     </View>
                   </View>
 
-                  {/* Document image preview */}
+                  {/* ── DOCUMENT IMAGE (tap to fullscreen) ──────────── */}
                   {doc.dataUrl ? (
-                    <View style={styles.docImageWrap}>
-                      <Image source={{ uri: doc.dataUrl }} style={styles.docImage} resizeMode="contain" />
-                    </View>
+                    <Pressable
+                      style={styles.docImgWrap}
+                      onPress={() => { setViewerLbl(doc.label || meta?.label || doc.docType); setViewerUri(doc.dataUrl); }}
+                    >
+                      <Image
+                        source={{ uri: doc.dataUrl }}
+                        style={styles.docImg}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.docImgOverlay}>
+                        <View style={styles.docImgZoomChip}>
+                          <Text style={styles.docImgZoomText}>🔍 Tap to view full size</Text>
+                        </View>
+                      </View>
+                    </Pressable>
                   ) : (
-                    <View style={styles.docNoImageWrap}>
-                      <Text style={styles.docNoImageText}>No image preview available</Text>
+                    <View style={styles.docNoImg}>
+                      <Text style={styles.docNoImgIcon}>🖼</Text>
+                      <Text style={styles.docNoImgText}>No image uploaded for this document</Text>
                     </View>
                   )}
 
-                  {/* Verify / Reject buttons */}
-                  <View style={styles.docActions}>
-                    {!isVerified ? (
+                  {/* Verify / Unverify */}
+                  <View style={styles.docActionRow}>
+                    {!isVerif ? (
                       <Pressable
                         style={[styles.verifyBtn, actingOn === actionKey && { opacity: 0.7 }]}
                         onPress={() => handleVerifyDoc(doc.docType, true)}
                         disabled={actingOn !== null}
                       >
-                        {actingOn === actionKey ? (
-                          <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                          <Text style={styles.verifyBtnText}>✅ Verify Document</Text>
-                        )}
+                        {actingOn === actionKey
+                          ? <ActivityIndicator size="small" color="#fff" />
+                          : <Text style={styles.verifyBtnText}>✅ Mark Verified</Text>
+                        }
                       </Pressable>
                     ) : (
                       <Pressable
@@ -384,26 +396,129 @@ export function AdminPSWDetailScreen() {
           )}
         </View>
 
-        {/* ── Specialties & Bio ─────────────────────────────────────── */}
-        {((psw.profile?.specialties?.length ?? 0) > 0 || psw.profile?.bio) && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>About</Text>
-            <View style={styles.card}>
-              {psw.profile?.bio ? (
-                <Text style={styles.bioText}>{psw.profile.bio}</Text>
-              ) : null}
-              {(psw.profile?.specialties?.length ?? 0) > 0 && (
-                <View style={[styles.chipsWrap, psw.profile?.bio ? { marginTop: 12 } : {}]}>
-                  {psw.profile!.specialties!.map(s => (
-                    <View key={s} style={styles.chip}>
-                      <Text style={styles.chipText}>{s}</Text>
-                    </View>
-                  ))}
+        {/* ── Police Check toggle ───────────────────────────────────── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Police Check</Text>
+          <View style={styles.card}>
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleLeft}>
+                <Text style={styles.toggleIcon}>🛡️</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.toggleLabel}>Police Check Cleared</Text>
+                  <Text style={styles.toggleSub}>RCMP / OPP criminal record check confirmed</Text>
                 </View>
-              )}
+              </View>
+              <Pressable
+                style={[styles.togglePill, policeCleared ? styles.toggleOn : styles.toggleOff, actingOn === 'police' && { opacity: 0.7 }]}
+                onPress={() => handlePoliceCheck(!policeCleared)}
+                disabled={actingOn !== null}
+              >
+                {actingOn === 'police'
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={styles.togglePillText}>{policeCleared ? '✓ Cleared' : 'Mark Cleared'}</Text>
+                }
+              </Pressable>
+            </View>
+          </View>
+        </View>
+
+        {/* ── Credential info ───────────────────────────────────────── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Onboarding Profile</Text>
+          <View style={styles.card}>
+            <InfoRow icon="🏅" label="Qualification" value={psw.profile?.qualificationType ?? 'PSW'} />
+            {(psw.profile?.licenseNumber || '') && (
+              <>
+                <Divider />
+                <InfoRow icon="🔖" label="Licence #" value={psw.profile!.licenseNumber!} />
+              </>
+            )}
+            {(psw.profile?.collegeName || '') && (
+              <>
+                <Divider />
+                <InfoRow icon="🏫" label="College" value={psw.profile!.collegeName!} />
+              </>
+            )}
+            {!!psw.profile?.experienceYears && (
+              <>
+                <Divider />
+                <InfoRow icon="📅" label="Experience" value={`${psw.profile.experienceYears} years`} />
+              </>
+            )}
+            {(psw.profile?.languages?.length ?? 0) > 0 && (
+              <>
+                <Divider />
+                <InfoRow icon="🌐" label="Languages" value={psw.profile!.languages!.join(', ')} />
+              </>
+            )}
+            {psw.profile?.firstAidCertified && (
+              <>
+                <Divider />
+                <InfoRow icon="🚑" label="First Aid" value="Self-reported certified" />
+              </>
+            )}
+            {psw.profile?.ownTransportation && (
+              <>
+                <Divider />
+                <InfoRow icon="🚗" label="Own Vehicle" value="Yes" />
+              </>
+            )}
+          </View>
+        </View>
+
+        {/* ── Specialties ───────────────────────────────────────────── */}
+        {(psw.profile?.specialties?.length ?? 0) > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Specialties</Text>
+            <View style={[styles.card, { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }]}>
+              {psw.profile!.specialties!.map(s => (
+                <View key={s} style={styles.chip}>
+                  <Text style={styles.chipText}>{s}</Text>
+                </View>
+              ))}
             </View>
           </View>
         )}
+
+        {psw.profile?.bio ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Bio</Text>
+            <View style={styles.card}>
+              <Text style={styles.bioText}>{psw.profile.bio}</Text>
+            </View>
+          </View>
+        ) : null}
+
+        {/* ── Final approve at bottom so admin approves AFTER reviewing ── */}
+        <View style={styles.bottomApprove}>
+          <Text style={styles.bottomApproveHint}>
+            {isApproved
+              ? '✅ This PSW is currently approved and can accept bookings.'
+              : 'After reviewing all documents above, approve or reject this PSW.'}
+          </Text>
+          <View style={styles.actionRow}>
+            <Pressable
+              style={[styles.approveBtn, isApproved && styles.approveBtnDone, actingOn === 'approve' && { opacity: 0.7 }]}
+              onPress={handleApprove}
+              disabled={actingOn !== null}
+            >
+              {actingOn === 'approve'
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={styles.approveBtnText}>{isApproved ? '✓ Approved' : '✅ Approve PSW'}</Text>
+              }
+            </Pressable>
+            <Pressable
+              style={[styles.rejectBtn, actingOn === 'reject' && { opacity: 0.7 }]}
+              onPress={handleReject}
+              disabled={actingOn !== null}
+            >
+              {actingOn === 'reject'
+                ? <ActivityIndicator color="#DC2626" size="small" />
+                : <Text style={styles.rejectBtnText}>{isApproved ? '✗ Revoke' : '✗ Reject'}</Text>
+              }
+            </Pressable>
+          </View>
+        </View>
       </ScrollView>
     </View>
   );
@@ -411,61 +526,86 @@ export function AdminPSWDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F5F7' },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  errorText: { fontSize: 16, color: Colors.secondaryLabel, marginBottom: 16 },
+  centered:  { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  loadingText: { fontSize: 14, color: Colors.secondaryLabel },
+  errorText:   { fontSize: 16, color: Colors.secondaryLabel },
   backBtnFallback: { backgroundColor: Colors.systemBlue, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 10 },
   backBtnFallbackText: { color: '#fff', fontWeight: '700' },
 
   // Header
   header: { paddingHorizontal: 20, paddingBottom: 20 },
-  backBtn: { marginBottom: 16 },
-  backBtnText: { color: 'rgba(255,255,255,0.75)', fontSize: 15, fontWeight: '600' },
+  backBtn: { marginBottom: 14 },
+  backBtnText: { color: 'rgba(255,255,255,0.7)', fontSize: 15, fontWeight: '600' },
+
   heroRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 },
   heroAvatar: {
-    width: 60, height: 60, borderRadius: 30,
+    width: 64, height: 64, borderRadius: 32,
     backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.4)',
-    overflow: 'hidden',
+    borderWidth: 3, borderColor: 'rgba(255,255,255,0.35)', overflow: 'hidden',
   },
-  heroAvatarImg: { width: 60, height: 60, borderRadius: 30 },
-  heroAvatarText: { color: '#fff', fontSize: 24, fontWeight: '800' },
-  heroName: { color: '#fff', fontSize: 20, fontWeight: '800', marginBottom: 2 },
-  heroPhone: { color: 'rgba(255,255,255,0.65)', fontSize: 13 },
+  heroAvatarImg:  { width: 64, height: 64, borderRadius: 32 },
+  heroAvatarText: { color: '#fff', fontSize: 26, fontWeight: '800' },
+  heroName:   { color: '#fff', fontSize: 20, fontWeight: '800', marginBottom: 2 },
+  heroPhone:  { color: 'rgba(255,255,255,0.65)', fontSize: 13 },
   heroRating: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 2 },
+
   statusPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   statusPillText: { color: '#fff', fontSize: 12, fontWeight: '700' },
 
   statsStrip: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 14, padding: 14,
   },
-  statItem: { flex: 1, alignItems: 'center' },
-  statVal: { color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 2 },
-  statLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '600' },
-  statDivider: { width: 1, height: 30, backgroundColor: 'rgba(255,255,255,0.2)' },
+  statItem:   { flex: 1, alignItems: 'center', gap: 2 },
+  statVal:    { color: '#fff', fontSize: 20, fontWeight: '900' },
+  statLabel:  { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '600', textAlign: 'center' },
+  statDivider:{ width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.2)' },
 
-  // Actions
-  actionRow: { flexDirection: 'row', gap: 10, padding: 16, paddingBottom: 4 },
+  // Body
+  body: { padding: 16, gap: 0 },
+
+  // Banners
+  noDocsBanner: {
+    flexDirection: 'row', gap: 12, alignItems: 'flex-start',
+    backgroundColor: '#FFF7ED', borderRadius: 16, padding: 16, marginBottom: 12,
+    borderWidth: 1.5, borderColor: '#FED7AA',
+  },
+  noDocsBannerIcon:  { fontSize: 24 },
+  noDocsBannerTitle: { fontSize: 14, fontWeight: '800', color: '#92400E', marginBottom: 4 },
+  noDocsBannerSub:   { fontSize: 13, color: '#B45309', lineHeight: 18 },
+
+  readyBanner: {
+    flexDirection: 'row', gap: 12, alignItems: 'center',
+    backgroundColor: '#F0FDF4', borderRadius: 16, padding: 16, marginBottom: 12,
+    borderWidth: 1.5, borderColor: '#86EFAC',
+  },
+  readyBannerIcon:  { fontSize: 28 },
+  readyBannerTitle: { fontSize: 14, fontWeight: '800', color: '#15803D', marginBottom: 2 },
+  readyBannerSub:   { fontSize: 13, color: '#16A34A' },
+
+  // Action row
+  actionRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   approveBtn: {
     flex: 1, backgroundColor: '#059669', borderRadius: 14,
-    paddingVertical: 14, alignItems: 'center',
+    paddingVertical: 16, alignItems: 'center',
+    shadowColor: '#059669', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
   approveBtnDone: { backgroundColor: '#16A34A' },
-  approveBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  approveBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
   rejectBtn: {
-    flex: 1, backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center',
+    flex: 1, backgroundColor: '#fff', borderRadius: 14, paddingVertical: 16, alignItems: 'center',
     borderWidth: 2, borderColor: '#FCA5A5',
   },
   rejectBtnText: { color: '#DC2626', fontSize: 15, fontWeight: '700' },
 
   // Section
-  body: { padding: 16, gap: 0 },
   section: { marginBottom: 20 },
   sectionTitle: {
     fontSize: 11, fontWeight: '700', color: '#888',
     textTransform: 'uppercase', letterSpacing: 0.8,
-    marginBottom: 8, paddingHorizontal: 4,
+    marginBottom: 10, paddingHorizontal: 4,
   },
+
   card: {
     backgroundColor: '#fff', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 14,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2,
@@ -473,76 +613,89 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: '#f0f0f0', marginVertical: 10 },
 
   // InfoRow
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  infoIcon: { fontSize: 16, width: 22 },
+  infoRow:   { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  infoIcon:  { fontSize: 16, width: 22 },
   infoLabel: { flex: 1, fontSize: 14, color: '#666' },
   infoValue: { fontSize: 14, fontWeight: '600', color: '#111827', textAlign: 'right' },
 
-  // Toggle
-  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  toggleLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  toggleIcon: { fontSize: 24 },
-  toggleLabel: { fontSize: 15, fontWeight: '600', color: '#111827' },
-  toggleSub: { fontSize: 12, color: '#888', marginTop: 1 },
-  togglePill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, minWidth: 100, alignItems: 'center' },
-  togglePillOn: { backgroundColor: '#059669' },
-  togglePillOff: { backgroundColor: '#6B7280' },
-  togglePillText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-
-  // Document cards
+  // Empty docs
   emptyDocsCard: {
     backgroundColor: '#fff', borderRadius: 18, padding: 32, alignItems: 'center',
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2,
   },
-  emptyDocsIcon: { fontSize: 40, marginBottom: 12 },
-  emptyDocsText: { fontSize: 16, fontWeight: '700', color: Colors.label, marginBottom: 6 },
-  emptyDocsSub: { fontSize: 13, color: Colors.secondaryLabel, textAlign: 'center', lineHeight: 19 },
+  emptyDocsIcon:  { fontSize: 44, marginBottom: 12 },
+  emptyDocsTitle: { fontSize: 16, fontWeight: '800', color: Colors.label, marginBottom: 8 },
+  emptyDocsSub:   { fontSize: 13, color: Colors.secondaryLabel, textAlign: 'center', lineHeight: 20 },
 
+  // Document cards
   docCard: {
     backgroundColor: '#fff', borderRadius: 18, padding: 16, marginBottom: 12,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 3,
-    borderWidth: 1.5, borderColor: '#E5E7EB',
+    borderWidth: 2, borderColor: '#E5E7EB',
   },
-  docCardVerified: { borderColor: '#A7F3D0' },
-  docCardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
-  docCardIcon: { fontSize: 28, marginTop: 2 },
-  docCardLabel: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 2 },
-  docCardDate: { fontSize: 12, color: '#6B7280' },
-  docVerifiedDate: { fontSize: 12, color: '#059669', fontWeight: '600', marginTop: 2 },
-  docStatusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, alignSelf: 'flex-start' },
-  docStatusText: { fontSize: 12, fontWeight: '700' },
+  docCardVerified: { borderColor: '#86EFAC' },
 
-  docImageWrap: {
-    height: 180, borderRadius: 12, overflow: 'hidden',
-    backgroundColor: '#F9FAFB', marginBottom: 12,
+  docHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
+  docIcon:   { fontSize: 30, marginTop: 2 },
+  docLabel:  { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 3 },
+  docDate:   { fontSize: 12, color: '#6B7280' },
+  docVerifDate: { fontSize: 12, color: '#059669', fontWeight: '600', marginTop: 3 },
+  docBadge:     { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, alignSelf: 'flex-start' },
+  docBadgeText: { fontSize: 12, fontWeight: '700' },
+
+  // Document image
+  docImgWrap: {
+    height: 220, borderRadius: 14, overflow: 'hidden',
+    backgroundColor: '#111', marginBottom: 12,
+    borderWidth: 2, borderColor: '#E5E7EB',
+  },
+  docImg: { width: '100%', height: '100%' },
+  docImgOverlay: { position: 'absolute', bottom: 10, left: 10, right: 10, alignItems: 'center' },
+  docImgZoomChip: {
+    backgroundColor: 'rgba(0,0,0,0.65)', borderRadius: 20,
+    paddingHorizontal: 14, paddingVertical: 7,
+  },
+  docImgZoomText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+
+  docNoImg: {
+    height: 100, borderRadius: 14, backgroundColor: '#F9FAFB',
+    alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12,
     borderWidth: 1, borderColor: '#E5E7EB',
   },
-  docImage: { width: '100%', height: '100%' },
-  docNoImageWrap: {
-    height: 80, borderRadius: 12,
-    backgroundColor: '#F9FAFB', alignItems: 'center', justifyContent: 'center',
-    marginBottom: 12, borderWidth: 1, borderColor: '#E5E7EB',
-  },
-  docNoImageText: { fontSize: 13, color: '#9CA3AF' },
+  docNoImgIcon: { fontSize: 28 },
+  docNoImgText: { fontSize: 13, color: '#9CA3AF', textAlign: 'center' },
 
-  docActions: { flexDirection: 'row', gap: 10 },
+  docActionRow: { gap: 8 },
   verifyBtn: {
-    flex: 1, backgroundColor: '#059669', borderRadius: 12,
-    paddingVertical: 12, alignItems: 'center',
+    backgroundColor: '#059669', borderRadius: 12, paddingVertical: 13, alignItems: 'center',
   },
-  verifyBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  verifyBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
   unverifyBtn: {
-    flex: 1, backgroundColor: '#FFF7ED', borderRadius: 12, paddingVertical: 12, alignItems: 'center',
+    backgroundColor: '#FFF7ED', borderRadius: 12, paddingVertical: 13, alignItems: 'center',
     borderWidth: 1.5, borderColor: '#FED7AA',
   },
   unverifyBtnText: { color: '#EA580C', fontSize: 14, fontWeight: '700' },
 
-  // About
-  bioText: { fontSize: 14, color: '#374151', lineHeight: 21 },
-  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  // Police check toggle
+  toggleRow:  { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  toggleLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  toggleIcon: { fontSize: 28 },
+  toggleLabel:{ fontSize: 15, fontWeight: '600', color: '#111827' },
+  toggleSub:  { fontSize: 12, color: '#888', marginTop: 2 },
+  togglePill: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, minWidth: 120, alignItems: 'center' },
+  toggleOn:   { backgroundColor: '#059669' },
+  toggleOff:  { backgroundColor: '#6B7280' },
+  togglePillText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+
+  // Bottom approve
+  bottomApprove: { marginTop: 8 },
+  bottomApproveHint: { fontSize: 13, color: Colors.secondaryLabel, textAlign: 'center', marginBottom: 12, lineHeight: 19 },
+
+  // Chips
   chip: {
     backgroundColor: '#EFF6FF', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5,
     borderWidth: 1, borderColor: '#BFDBFE',
   },
   chipText: { fontSize: 13, fontWeight: '600', color: '#1D4ED8' },
+  bioText:  { fontSize: 14, color: '#374151', lineHeight: 21 },
 });

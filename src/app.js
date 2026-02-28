@@ -33,6 +33,12 @@ app.use(cors({
 
 app.use(express.json({ limit: '15mb' })); // Allow base64 document uploads
 
+// Prevent browsers from caching API responses (avoids stale auth/booking data)
+app.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/admin', express.static(path.join(__dirname, '../admin')));
 app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, '../admin/index.html')));

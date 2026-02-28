@@ -84,6 +84,10 @@ export function apiRateBooking(payload: { bookingId: string; rating: number; com
   return request<{ message: string }>('POST', '/ratings', payload);
 }
 
+export function apiGetAvailablePSWs() {
+  return request<{ count: number; psws: AvailablePSW[] }>('GET', '/psws/available');
+}
+
 // ─── PSW ──────────────────────────────────────────────────────────────────────
 
 export function apiNearbyJobs(coords?: { lat: number; lng: number }) {
@@ -197,6 +201,15 @@ export function apiGetAllBookings(params?: { status?: string; page?: number; lim
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface AvailablePSW {
+  _id: string;
+  name: string;
+  rating: number;
+  lat: number;
+  lng: number;
+  qualificationType: string;
+}
 
 export interface SubmittedDocument {
   docType: string;

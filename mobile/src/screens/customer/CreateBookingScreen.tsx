@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -14,8 +14,70 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { apiCreateBooking } from '../../api/client';
+import { apiCreateBooking, apiGetAvailablePSWs, AvailablePSW } from '../../api/client';
 import { Colors, ServiceColors, ServiceIcons } from '../../utils/colors';
+
+// react-native-maps (native only)
+const MapView = Platform.OS !== 'web' ? require('react-native-maps').default : null;
+const Marker  = Platform.OS !== 'web' ? require('react-native-maps').Marker  : null;
+
+// ── Leaflet for web ───────────────────────────────────────────────────────────
+declare global { interface Window { L: any } }
+
+function loadLeaflet(): Promise<void> {
+  return new Promise(resolve => {
+    if (typeof window === 'undefined') { resolve(); return; }
+    if (window.L) { resolve(); return; }
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.onload = () => resolve();
+    document.head.appendChild(script);
+  });
+}
+
+// Defined outside parent component to avoid remount on re-render
+function PSWMapWeb({ psws }: { psws: AvailablePSW[] }) {
+  const containerRef = useRef<any>(null);
+  const mapRef = useRef<any>(null);
+
+  useEffect(() => {
+    loadLeaflet().then(() => {
+      if (!containerRef.current || mapRef.current) return;
+      const L = window.L;
+      const map = L.map(containerRef.current, { zoomControl: true, attributionControl: false })
+        .setView([46.4917, -80.9924], 11);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+
+      const pswIcon = L.divIcon({
+        html: '<div style="background:#007AFF;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,122,255,0.5)"></div>',
+        className: '',
+        iconAnchor: [8, 8],
+      });
+
+      psws.forEach(p => {
+        L.marker([p.lat, p.lng], { icon: pswIcon })
+          .addTo(map)
+          .bindPopup(`<b>${p.qualificationType}</b><br>⭐ ${p.rating.toFixed(1)}`);
+      });
+
+      mapRef.current = map;
+    });
+    return () => {
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+    };
+  }, [psws]);
+
+  return (
+    <div
+      ref={containerRef}
+      style={{ width: '100%', height: 180, borderRadius: '12px 12px 0 0', overflow: 'hidden' } as any}
+    />
+  );
+}
 
 const SUDBURY_CENTER = { lat: 46.4917, lng: -80.9924 };
 
@@ -78,8 +140,17 @@ export function CreateBookingScreen() {
   const [date, setDate] = useState(tomorrow9am());
   const [frequency, setFrequency] = useState<Frequency>('weekly');
   const [notes, setNotes] = useState('');
+  const [address, setAddress] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [availablePSWs, setAvailablePSWs] = useState<AvailablePSW[]>([]);
+  const [pswCount, setPswCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    apiGetAvailablePSWs()
+      .then(d => { setAvailablePSWs(d.psws); setPswCount(d.count); })
+      .catch(() => {}); // silently ignore if fails
+  }, []);
 
   const total = hours * RATE;
   const activeType = CARE_TYPES.find(c => c.id === careType)!;
@@ -102,6 +173,7 @@ export function CreateBookingScreen() {
         hours,
         scheduledAt: scheduledAt.toISOString(),
         location: { coordinates: DEFAULT_COORDS },
+        address: address.trim() || 'Greater Sudbury, ON',
         notes: extraParts.join(' · ') || undefined,
       });
       if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -113,7 +185,7 @@ export function CreateBookingScreen() {
   }
 
   function resetForm() {
-    setStep(0); setSuccess(false); setNotes('');
+    setStep(0); setSuccess(false); setNotes(''); setAddress('');
     setHours(3); setDate(tomorrow9am()); setCareType('scheduled');
   }
 
@@ -200,6 +272,52 @@ export function CreateBookingScreen() {
         {step === 0 && (
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>What care do you need?</Text>
+
+            {/* ── PSW Availability Map ── */}
+            <View style={styles.pswAvailCard}>
+              {Platform.OS === 'web' && availablePSWs.length > 0 ? (
+                <PSWMapWeb psws={availablePSWs} />
+              ) : Platform.OS === 'web' ? (
+                // @ts-ignore
+                <iframe
+                  src="https://www.openstreetmap.org/export/embed.html?bbox=-81.15,46.42,-80.83,46.57&layer=mapnik"
+                  style={{ width: '100%', height: 180, border: 'none', display: 'block', borderRadius: '12px 12px 0 0', pointerEvents: 'none' }}
+                  title="Greater Sudbury coverage"
+                />
+              ) : (
+                MapView ? (
+                  <MapView
+                    style={styles.pswNativeMap}
+                    initialRegion={{ latitude: 46.4917, longitude: -80.9924, latitudeDelta: 0.18, longitudeDelta: 0.18 }}
+                    scrollEnabled={false}
+                    zoomEnabled={false}
+                  >
+                    {availablePSWs.map(p => (
+                      Marker && (
+                        <Marker
+                          key={String(p._id)}
+                          coordinate={{ latitude: p.lat, longitude: p.lng }}
+                          pinColor="#007AFF"
+                          title={p.qualificationType}
+                          description={`⭐ ${p.rating.toFixed(1)}`}
+                        />
+                      )
+                    ))}
+                  </MapView>
+                ) : (
+                  <View style={styles.pswNativeMap} />
+                )
+              )}
+              <View style={styles.pswAvailInfo}>
+                <View style={styles.pswAvailBadge}>
+                  <Text style={styles.pswAvailCount}>
+                    {pswCount === null ? '...' : pswCount}
+                  </Text>
+                  <Text style={styles.pswAvailCountLabel}> PSWs available nearby</Text>
+                </View>
+                <Text style={styles.pswAvailSub}>Greater Sudbury · 15 km radius · Verified & insured</Text>
+              </View>
+            </View>
 
             <Text style={styles.subSectionLabel}>CARE TYPE</Text>
             <View style={styles.careTypeRow}>
@@ -373,6 +491,20 @@ export function CreateBookingScreen() {
               </View>
             </View>
 
+            {/* Address */}
+            <View style={styles.scheduleCard}>
+              <Text style={styles.scheduleLabel}>📍  Service Address</Text>
+              <TextInput
+                style={styles.notesInput}
+                value={address}
+                onChangeText={setAddress}
+                placeholder="e.g. 123 Elm St, Sudbury, ON"
+                placeholderTextColor={Colors.tertiaryLabel}
+                returnKeyType="done"
+                autoComplete="street-address"
+              />
+            </View>
+
             {/* Notes */}
             <View style={styles.scheduleCard}>
               <Text style={styles.scheduleLabel}>📝  Special Instructions (optional)</Text>
@@ -470,13 +602,18 @@ export function CreateBookingScreen() {
               )}
               <Pressable
                 style={styles.mapInfo}
-                onPress={() => Linking.openURL(`https://www.google.com/maps?q=${SUDBURY_CENTER.lat},${SUDBURY_CENTER.lng}`)}
+                onPress={() => {
+                  const query = address.trim() || `${SUDBURY_CENTER.lat},${SUDBURY_CENTER.lng}`;
+                  Linking.openURL(`https://www.google.com/maps?q=${encodeURIComponent(query)}`);
+                }}
               >
                 <View style={styles.mapInfoRow}>
                   <Text style={styles.mapInfoIcon}>📍</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.mapInfoTitle}>Service Location</Text>
-                    <Text style={styles.mapInfoSub}>Greater Sudbury, ON · 15 km radius</Text>
+                    <Text style={styles.mapInfoSub}>
+                      {address.trim() || 'Greater Sudbury, ON · 15 km radius'}
+                    </Text>
                   </View>
                   <Text style={styles.mapArrow}>→</Text>
                 </View>
@@ -562,6 +699,22 @@ const styles = StyleSheet.create({
     fontSize: 11, fontWeight: '700', color: Colors.secondaryLabel,
     letterSpacing: 0.8, marginBottom: 10,
   },
+
+  // ── PSW availability map card ──
+  pswAvailCard: {
+    backgroundColor: Colors.systemBackground, borderRadius: 16, marginBottom: 20,
+    overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 4,
+  },
+  pswNativeMap: { width: '100%', height: 180 },
+  pswAvailInfo: {
+    padding: 14, borderTopWidth: 1, borderTopColor: Colors.separator,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  pswAvailBadge: { flexDirection: 'row', alignItems: 'center' },
+  pswAvailCount: { fontSize: 22, fontWeight: '900', color: Colors.systemBlue },
+  pswAvailCountLabel: { fontSize: 14, fontWeight: '600', color: Colors.label },
+  pswAvailSub: { fontSize: 11, color: Colors.tertiaryLabel, flex: 1, textAlign: 'right' },
 
   // ── Care type ──
   careTypeRow: { flexDirection: 'row', gap: 10, marginBottom: 6 },
