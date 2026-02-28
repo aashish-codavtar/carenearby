@@ -7,7 +7,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build:web": "npx expo export -p web && node scripts/post-web-build.js"
+    "build:web": "npx expo export -p web && node scripts/post-web-build.js",
+    "deploy": "npm run build:web && cd dist && vercel --prod --yes"
   },
   "dependencies": {
     "@expo/metro-runtime": "~4.0.1",

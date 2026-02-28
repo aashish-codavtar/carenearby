@@ -178,4 +178,13 @@ fs.writeFileSync(
 );
 console.log('✔ Wrote vercel.json with SPA rewrite rule');
 
+// ── 6. Write .vercel/project.json so `vercel --prod` always targets the right project ──
+const vercelProjDir = path.join(DIST, '.vercel');
+if (!fs.existsSync(vercelProjDir)) fs.mkdirSync(vercelProjDir, { recursive: true });
+fs.writeFileSync(
+  path.join(vercelProjDir, 'project.json'),
+  JSON.stringify({ projectId: 'prj_Y3nh4VxcAbHpLSxzak3CEV7DzAcD', orgId: 'team_3ucuU6nY6h28u3fr1Q6LTU9y' }) + '\n'
+);
+console.log('✔ Wrote .vercel/project.json (carenearby mobile project)');
+
 console.log('\n✅ Post-web-build complete.');
