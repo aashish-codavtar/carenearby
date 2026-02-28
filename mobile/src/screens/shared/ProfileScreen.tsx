@@ -97,13 +97,26 @@ export function ProfileScreen() {
   }, []);
 
   async function savePhoto(asset: ImagePicker.ImagePickerAsset) {
-    const uri = asset.uri;
-    setPhotoUri(uri);
-    await Storage.savePhotoUri(uri);
-    // Upload to server for PSWs (as base64 data URL)
-    if (isPSW && asset.base64) {
-      const dataUrl = `data:image/jpeg;base64,${asset.base64}`;
-      apiUpdateProfile({ photoUrl: dataUrl }).catch(() => {});
+    // Prefer base64 data URL — blob:// URIs expire after the browser session
+    let persistUri: string = asset.uri;
+    if (asset.base64) {
+      persistUri = `data:image/jpeg;base64,${asset.base64}`;
+    } else if (asset.uri.startsWith('blob:') && typeof FileReader !== 'undefined') {
+      try {
+        const resp = await fetch(asset.uri);
+        const blob = await resp.blob();
+        persistUri = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } catch {}
+    }
+    setPhotoUri(persistUri);
+    await Storage.savePhotoUri(persistUri);
+    if (isPSW) {
+      apiUpdateProfile({ photoUrl: persistUri }).catch(() => {});
     }
   }
 

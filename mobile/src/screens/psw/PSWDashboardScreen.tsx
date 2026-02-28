@@ -224,10 +224,10 @@ export function PSWDashboardScreen() {
               disabled={toggling}
             >
               <Text style={styles.onlineBtnIcon}>{isOnline ? '🟢' : '⚫'}</Text>
-              <Text style={[styles.onlineBtnText, { color: isOnline ? Colors.onlineGreen : '#fff' }]}>
+              <Text style={[styles.onlineBtnText, { color: isOnline ? Colors.onlineGreen : '#fff' }]} numberOfLines={1} adjustsFontSizeToFit>
                 {isOnline ? t.onlineLabel : t.goOnline}
               </Text>
-              <Text style={[styles.onlineBtnSub, { color: isOnline ? Colors.systemGray : 'rgba(255,255,255,0.6)' }]}>
+              <Text style={[styles.onlineBtnSub, { color: isOnline ? Colors.systemGray : 'rgba(255,255,255,0.6)' }]} numberOfLines={2} adjustsFontSizeToFit>
                 {isOnline ? t.tapOffline : t.tapStart}
               </Text>
             </Pressable>
@@ -419,13 +419,15 @@ const styles = StyleSheet.create({
   onlineBtn: {
     width: 124, height: 124, borderRadius: 62,
     alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 10,
+    overflow: 'hidden',
     shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 16, elevation: 12,
   },
   onlineBtnOn: { backgroundColor: '#fff' },
   onlineBtnOff: { backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.35)' },
   onlineBtnIcon: { fontSize: 26, marginBottom: 4 },
-  onlineBtnText: { fontSize: 15, fontWeight: '900' },
-  onlineBtnSub: { fontSize: 10, marginTop: 2 },
+  onlineBtnText: { fontSize: 13, fontWeight: '900', textAlign: 'center' },
+  onlineBtnSub: { fontSize: 9, marginTop: 2, textAlign: 'center' },
 
   // Earnings row
   earningsRow: {

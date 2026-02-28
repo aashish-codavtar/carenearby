@@ -80,11 +80,27 @@ export function PSWDocumentsScreen() {
         });
         if (!result.canceled && result.assets[0]) {
           const asset = result.assets[0];
-          // Build data URL: on web the uri may already be blob:// so we use base64
+          // Build a persistent data URL — blob:// URIs expire after the browser session
           const mimeType = asset.mimeType ?? 'image/jpeg';
-          const dataUrl = asset.base64
-            ? `data:${mimeType};base64,${asset.base64}`
-            : asset.uri;   // fallback (web sometimes returns data URL directly)
+          let dataUrl: string;
+          if (asset.base64) {
+            dataUrl = `data:${mimeType};base64,${asset.base64}`;
+          } else if (asset.uri.startsWith('blob:') && typeof FileReader !== 'undefined') {
+            try {
+              const resp = await fetch(asset.uri);
+              const blob = await resp.blob();
+              dataUrl = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+            } catch {
+              dataUrl = asset.uri;
+            }
+          } else {
+            dataUrl = asset.uri;
+          }
 
           const doc: StoredDocument & { dataUrl?: string; mimeType?: string; fileName?: string } = {
             id:         docType.id,
