@@ -25,6 +25,7 @@ import { Storage } from '../../utils/storage';
 const T = {
   en: {
     greeting:       (h: number) => h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening',
+    availableToday: 'AVAILABLE TODAY',
     bookNow:        'Book Care Now',
     bookSub:        'Available today · Starting at $25/hr',
     nearbyTitle:    'PSWs Near You',
@@ -50,10 +51,18 @@ const T = {
     statRating:     'Avg Rating',
     statRate:       'Per Hour',
     activeBooking:  'Active Booking',
-    trustTitle:     'Why CareNearby?',
+    trustLabel:      'TRUST',
+    trustTitle:      'Why CareNearby?',
+    installTitle:    'Install CareNearby App',
+    installSub:      'Add to home screen for quick access',
+    installBtn:      'Install',
+    iosInstallTitle: 'Install on iPhone / iPad',
+    iosInstallSub:   'Tap',
+    iosInstallSub2:  'then "Add to Home Screen"',
   },
   fr: {
     greeting:       (h: number) => h < 12 ? 'Bonjour' : h < 17 ? 'Bon après-midi' : 'Bonsoir',
+    availableToday: "DISPONIBLE AUJOURD'HUI",
     bookNow:        'Réserver maintenant',
     bookSub:        "Disponible aujourd'hui · À partir de 25 $/h",
     nearbyTitle:    'PAP à proximité',
@@ -79,7 +88,14 @@ const T = {
     statRating:     'Note moy.',
     statRate:       'Par heure',
     activeBooking:  'Réservation active',
-    trustTitle:     'Pourquoi CareNearby ?',
+    trustLabel:      'CONFIANCE',
+    trustTitle:      'Pourquoi CareNearby ?',
+    installTitle:    "Installer l'appli CareNearby",
+    installSub:      "Ajouter à l'écran d'accueil",
+    installBtn:      'Installer',
+    iosInstallTitle: "Installer sur iPhone / iPad",
+    iosInstallSub:   'Appuyez sur',
+    iosInstallSub2:  'puis « Ajouter à l\'écran d\'accueil »',
   },
 };
 
@@ -96,17 +112,17 @@ const SERVICES = [
 const ACTIVE_STATUSES = new Set(['REQUESTED', 'ACCEPTED', 'STARTED']);
 
 const TRUST_ITEMS = [
-  { icon: '🛡️', label: 'Police Checked',  sub: 'Criminal record verified' },
-  { icon: '✅', label: 'ID Verified',      sub: 'Government ID confirmed' },
-  { icon: '⭐', label: '4.8 Rating',       sub: 'Avg across all PSWs' },
-  { icon: '🏥', label: 'Certified PSWs',   sub: 'College-trained professionals' },
+  { icon: '🛡️', en: 'Police Checked',       fr: 'Vérif. policière',       subEn: 'Criminal record verified',       subFr: 'Casier judiciaire vérifié' },
+  { icon: '✅', en: 'ID Verified',           fr: 'Identité vérifiée',      subEn: 'Government ID confirmed',        subFr: "Pièce d'identité confirmée" },
+  { icon: '⭐', en: '4.8 Rating',            fr: 'Note de 4,8',            subEn: 'Avg across all PSWs',            subFr: 'Moyenne de tous les PAP' },
+  { icon: '🏥', en: 'Certified PSWs',        fr: 'PAP certifiés',          subEn: 'College-trained professionals',  subFr: 'Professionnels formés en collège' },
 ];
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
+function formatDate(iso: string, locale: string) {
+  return new Date(iso).toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' });
 }
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', hour12: true });
+function formatTime(iso: string, locale: string) {
+  return new Date(iso).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
 // ── react-native-maps (native only) ────────────────────────────────────────────
@@ -221,8 +237,11 @@ export function HomeScreen() {
     window.addEventListener('beforeinstallprompt', handler);
 
     // iOS Safari: no beforeinstallprompt — show manual instructions instead
+    // iPadOS 13+ reports as "MacIntel" in desktop mode, so also check maxTouchPoints
     const ua = navigator.userAgent;
-    const isIOS = /iphone|ipad|ipod/i.test(ua) && !(window as any).MSStream;
+    const isIOS = (/iphone|ipad|ipod/i.test(ua) ||
+      (typeof navigator.platform !== 'undefined' && navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) &&
+      !(window as any).MSStream;
     if (isIOS) setShowIOSHint(true);
 
     return () => window.removeEventListener('beforeinstallprompt', handler);
@@ -246,10 +265,11 @@ export function HomeScreen() {
     return () => pulse.stop();
   }, []);
 
+  const locale    = lang === 'fr' ? 'fr-CA' : 'en-CA';
   const firstName = user?.name?.split(' ')[0] ?? (lang === 'fr' ? 'là' : 'there');
   const hour      = new Date().getHours();
   const greeting  = t.greeting(hour);
-  const today     = new Date().toLocaleDateString(lang === 'fr' ? 'fr-CA' : 'en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
+  const today     = new Date().toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric' });
 
   const serviceRows: typeof SERVICES[] = [];
   for (let i = 0; i < SERVICES.length; i += 2) serviceRows.push(SERVICES.slice(i, i + 2));
@@ -303,7 +323,7 @@ export function HomeScreen() {
 
           <Pressable style={styles.bookingCard} onPress={() => nav.navigate('NewBooking')}>
             <View style={styles.bookingCardLeft}>
-              <Text style={styles.bookingCardEyebrow}>AVAILABLE TODAY</Text>
+              <Text style={styles.bookingCardEyebrow}>{t.availableToday}</Text>
               <Text style={styles.bookingCardTitle}>{t.bookNow}</Text>
               <Text style={styles.bookingCardSub}>{t.bookSub}</Text>
             </View>
@@ -325,7 +345,7 @@ export function HomeScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.activeBannerTitle}>{t.activeBooking}</Text>
                   <Text style={styles.activeBannerSub}>
-                    {activeBooking.serviceType} · {formatDate(activeBooking.scheduledAt)} {formatTime(activeBooking.scheduledAt)}
+                    {activeBooking.serviceType} · {formatDate(activeBooking.scheduledAt, locale)} {formatTime(activeBooking.scheduledAt, locale)}
                   </Text>
                 </View>
               </View>
@@ -463,15 +483,15 @@ export function HomeScreen() {
 
         {/* ── Trust & Safety ── */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionLabel}>TRUST</Text>
+          <Text style={styles.sectionLabel}>{t.trustLabel}</Text>
           <Text style={styles.sectionTitle}>{t.trustTitle}</Text>
         </View>
         <View style={styles.trustGrid}>
           {TRUST_ITEMS.map(item => (
-            <View key={item.label} style={styles.trustCard}>
+            <View key={item.en} style={styles.trustCard}>
               <Text style={styles.trustCardIcon}>{item.icon}</Text>
-              <Text style={styles.trustCardLabel}>{item.label}</Text>
-              <Text style={styles.trustCardSub}>{item.sub}</Text>
+              <Text style={styles.trustCardLabel}>{lang === 'fr' ? item.fr : item.en}</Text>
+              <Text style={styles.trustCardSub}>{lang === 'fr' ? item.subFr : item.subEn}</Text>
             </View>
           ))}
         </View>
@@ -515,22 +535,22 @@ export function HomeScreen() {
             <View style={styles.installBannerLeft}>
               <Text style={styles.installBannerIcon}>📲</Text>
               <View>
-                <Text style={styles.installBannerTitle}>Install CareNearby App</Text>
-                <Text style={styles.installBannerSub}>Add to home screen for quick access</Text>
+                <Text style={styles.installBannerTitle}>{t.installTitle}</Text>
+                <Text style={styles.installBannerSub}>{t.installSub}</Text>
               </View>
             </View>
-            <Text style={styles.installBannerBtn}>Install</Text>
+            <Text style={styles.installBannerBtn}>{t.installBtn}</Text>
           </Pressable>
         )}
 
-        {/* ── iOS Safari install hint ── */}
+        {/* ── iOS Safari install hint (also covers iPadOS 13+ desktop mode) ── */}
         {showIOSHint && (
           <View style={styles.installBanner}>
             <View style={styles.installBannerLeft}>
               <Text style={styles.installBannerIcon}>📲</Text>
               <View style={{ flex: 1 }}>
-                <Text style={styles.installBannerTitle}>Install on iPhone / iPad</Text>
-                <Text style={styles.installBannerSub}>Tap <Text style={{ fontWeight: '700' }}>Share ⎙</Text> then <Text style={{ fontWeight: '700' }}>"Add to Home Screen"</Text></Text>
+                <Text style={styles.installBannerTitle}>{t.iosInstallTitle}</Text>
+                <Text style={styles.installBannerSub}>{t.iosInstallSub} <Text style={{ fontWeight: '700' }}>Share ⎙</Text> {t.iosInstallSub2}</Text>
               </View>
             </View>
             <Pressable onPress={() => setShowIOSHint(false)} style={styles.installDismiss}>

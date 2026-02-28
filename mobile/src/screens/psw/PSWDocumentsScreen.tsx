@@ -29,9 +29,9 @@ const DOC_TYPES: {
 }[] = [
   { id: 'police_check',    label: 'Police Check Clearance',      sublabel: 'RCMP/OPP criminal record check — required', icon: '🛡️', required: true },
   { id: 'psw_certificate', label: 'PSW Certificate',             sublabel: 'Official credential from your college',      icon: '🏅', required: true },
-  { id: 'first_aid',       label: 'First Aid / CPR Certificate', sublabel: 'Valid St. John Ambulance or Red Cross cert', icon: '🚑', required: true },
-  { id: 'drivers_license', label: "Driver's Licence",            sublabel: 'Ontario G or G2 — both sides',              icon: '🚗', required: false },
-  { id: 'id_card',         label: 'Government ID',               sublabel: 'Passport, Ontario Photo Card, or health card', icon: '🪪', required: false },
+  { id: 'first_aid_cert',  label: 'First Aid / CPR Certificate', sublabel: 'Valid St. John Ambulance or Red Cross cert', icon: '🚑', required: true },
+  { id: 'driver_license',  label: "Driver's Licence",            sublabel: 'Ontario G or G2 — both sides',              icon: '🚗', required: false },
+  { id: 'id_proof',        label: 'Government ID',               sublabel: 'Passport, Ontario Photo Card, or health card', icon: '🪪', required: false },
   { id: 'insurance',       label: 'Liability Insurance',         sublabel: 'Professional liability / E&O if applicable', icon: '📄', required: false },
 ];
 

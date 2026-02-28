@@ -262,7 +262,7 @@ router.get(
     try {
       const { status, docType, entityType, page = 1, limit = 20 } = req.query;
 
-      const filter = {};
+      const filter = { isActive: true };
       if (status) filter.status = status;
       if (docType) filter.docType = docType;
       if (entityType) filter.entityType = entityType;
@@ -301,6 +301,40 @@ router.get(
     try {
       const count = await Document.countDocuments({ status: 'PENDING', isActive: true });
       res.json({ pendingCount: count });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// GET /admin/documents/psw/:pswId - Get all documents for a PSW
+// NOTE: must be defined BEFORE /documents/:id to avoid the :id wildcard matching 'psw'
+router.get(
+  '/documents/psw/:pswId',
+  authenticateAdminOrUser,
+  async (req, res) => {
+    try {
+      const { pswId } = req.params;
+
+      if (!mongoose.isValidObjectId(pswId)) {
+        return res.status(400).json({ error: 'Invalid PSW ID' });
+      }
+
+      const profile = await PSWProfile.findOne({ userId: pswId });
+      if (!profile) {
+        return res.status(200).json({ documents: [] });
+      }
+
+      const documents = await Document.find({
+        entityType: 'PSW',
+        entityId: profile._id,
+        isActive: true,
+      })
+        .sort({ submittedAt: -1 })
+        .lean();
+
+      res.json({ documents });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Server error' });
@@ -391,39 +425,6 @@ router.post(
       await logAudit(req.user._id, 'DOCUMENT_REJECTED', 'Document', document._id, { docType: document.docType, reason }, req);
 
       res.json({ message: 'Document rejected', document });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: 'Server error' });
-    }
-  }
-);
-
-// GET /admin/documents/psw/:pswId - Get all documents for a PSW
-router.get(
-  '/documents/psw/:pswId',
-  authenticateAdminOrUser,
-  async (req, res) => {
-    try {
-      const { pswId } = req.params;
-
-      if (!mongoose.isValidObjectId(pswId)) {
-        return res.status(400).json({ error: 'Invalid PSW ID' });
-      }
-
-      const profile = await PSWProfile.findOne({ userId: pswId });
-      if (!profile) {
-        return res.status(404).json({ error: 'PSW profile not found' });
-      }
-
-      const documents = await Document.find({
-        entityType: 'PSW',
-        entityId: profile._id,
-        isActive: true,
-      })
-        .sort({ submittedAt: -1 })
-        .lean();
-
-      res.json({ documents });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Server error' });
