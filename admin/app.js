@@ -5,6 +5,12 @@ let currentPage = 'dashboard';
 let currentDoc = null;
 let currentPSW = null;
 
+// Decode the exp claim from a JWT without verifying signature (client-side only)
+function parseJwtExpiry(tok) {
+  try { return JSON.parse(atob(tok.split('.')[1])).exp * 1000; }
+  catch { return 0; }
+}
+
 // ── Toast notifications ────────────────────────────────────────────────────────
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
@@ -23,18 +29,24 @@ function showToast(message, type = 'info') {
 async function apiCall(endpoint, options = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  
+
   const res = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
     headers: { ...headers, ...options.headers }
   });
-  
+
+  // Read body once so we can use the error message in all branches
+  const data = await res.json().catch(() => ({}));
+
   if (res.status === 401) {
-    logout('Session expired. Please sign in again.');
+    // Login endpoint returns 401 for wrong credentials — don't treat as session expiry
+    if (endpoint === '/admin/login') {
+      throw new Error(data.error || 'Invalid credentials');
+    }
+    logout((data.error || 'Session expired') + '. Please sign in again.');
     throw new Error('__session_expired__');
   }
-  
-  const data = await res.json();
+
   if (!res.ok) throw new Error(data.error || 'Request failed');
   return data;
 }
@@ -524,17 +536,24 @@ document.getElementById('reject-psw-modal-btn').addEventListener('click', reject
 
 // Check auth on load
 (async function init() {
-  if (token) {
-    try {
-      const data = await apiCall('/admin/me');
-      document.getElementById('admin-name').textContent = data.admin.username;
-      showScreen('admin-screen');
-      showPage('dashboard');
-    } catch (e) {
-      // 401 already called logout() with the "Session expired" message — don't call it again
-      if (!isSessionError(e)) logout();
-    }
-  } else {
+  if (!token) { showScreen('login-screen'); return; }
+
+  // Client-side expiry check — avoids a server round-trip and the "Session expired"
+  // message appearing on a simple page refresh with a known-expired token
+  if (parseJwtExpiry(token) < Date.now()) {
+    localStorage.removeItem('adminToken');
+    token = null;
     showScreen('login-screen');
+    return;
+  }
+
+  try {
+    const data = await apiCall('/admin/me');
+    document.getElementById('admin-name').textContent = data.admin.username;
+    showScreen('admin-screen');
+    showPage('dashboard');
+  } catch (e) {
+    // 401 already called logout() with the actual error message — don't call it again
+    if (!isSessionError(e)) logout();
   }
 })();
