@@ -149,12 +149,11 @@ export async function apiUploadDocument(payload: { docType: string; label: strin
 
   if (payload.dataUrl) {
     let fileBlob: Blob;
-    // Safari on iOS/iPad often returns a blob:// URI instead of a base64 data URL.
-    // For blob:// or http(s):// URIs, fetch the resource directly.
-    if (payload.dataUrl.startsWith('blob:') || payload.dataUrl.startsWith('http:') || payload.dataUrl.startsWith('https:')) {
+    // Handle various URI types: blob://, http://, https://, file://
+    if (payload.dataUrl.startsWith('blob:') || payload.dataUrl.startsWith('http:') || payload.dataUrl.startsWith('https:') || payload.dataUrl.startsWith('file:')) {
       const resp = await fetch(payload.dataUrl);
       fileBlob = await resp.blob();
-    } else {
+    } else if (payload.dataUrl.startsWith('data:')) {
       // Standard base64 data URL (data:image/jpeg;base64,...)
       const mime = payload.mimeType ?? payload.dataUrl.split(';')[0].split(':')[1] ?? 'image/jpeg';
       const b64  = payload.dataUrl.includes(',') ? payload.dataUrl.split(',')[1] : payload.dataUrl;
@@ -162,6 +161,10 @@ export async function apiUploadDocument(payload: { docType: string; label: strin
       const bytes  = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
       fileBlob = new Blob([bytes], { type: mime });
+    } else {
+      // Fallback: treat as file path
+      const resp = await fetch(payload.dataUrl);
+      fileBlob = await resp.blob();
     }
     const name = payload.fileName ?? `doc_${Date.now()}.${(fileBlob.type || payload.mimeType || 'image/jpeg').split('/')[1] || 'jpg'}`;
     form.append('file', fileBlob, name);

@@ -145,7 +145,7 @@ export function PSWOnboardingScreen() {
         }
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: false, quality: 0.92,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: false, quality: 0.5,
       });
       if (!result.canceled && result.assets[0]) {
         const doc: StoredDocument = { id: docType.id, label: docType.label, uri: result.assets[0].uri, uploadedAt: new Date().toISOString() };

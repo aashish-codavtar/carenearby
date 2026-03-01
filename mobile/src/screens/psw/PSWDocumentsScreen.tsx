@@ -75,43 +75,22 @@ export function PSWDocumentsScreen() {
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: false,
-          quality: 0.6,
-          base64: true,   // get base64 so we can upload to server
+          quality: 0.5, // Lower quality = smaller file = faster upload
+          base64: false, // Don't get base64 - we'll use URI directly
         });
         if (!result.canceled && result.assets[0]) {
           const asset = result.assets[0];
-          // Build a persistent data URL — blob:// URIs expire after the browser session
+          // Store minimal data - just URI reference (not full base64)
+          // This is much faster and uses less storage
           const mimeType = asset.mimeType ?? 'image/jpeg';
-          let dataUrl: string;
-          if (asset.base64) {
-            dataUrl = `data:${mimeType};base64,${asset.base64}`;
-          } else if (asset.uri.startsWith('blob:') && typeof FileReader !== 'undefined') {
-            try {
-              const resp = await fetch(asset.uri);
-              const blob = await resp.blob();
-              dataUrl = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result as string);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-              });
-            } catch {
-              dataUrl = asset.uri;
-            }
-          } else {
-            dataUrl = asset.uri;
-          }
-
-          const doc: StoredDocument & { dataUrl?: string; mimeType?: string; fileName?: string } = {
+          
+          const doc: StoredDocument = {
             id:         docType.id,
             label:      docType.label,
             uri:        asset.uri,
             uploadedAt: new Date().toISOString(),
-            dataUrl,
-            mimeType,
-            fileName: asset.fileName ?? `${docType.id}_${Date.now()}.jpg`,
           };
-          await Storage.saveDocument(doc as StoredDocument);
+          await Storage.saveDocument(doc);
           const updated = await Storage.getDocuments();
           setDocs(updated);
           if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -159,17 +138,22 @@ export function PSWDocumentsScreen() {
       let successCount = 0;
       let failCount = 0;
 
-      for (const doc of docs) {
+      // Upload all documents in PARALLEL for faster performance
+      const uploadPromises = docs.map(async (doc) => {
         try {
           const dataUrl  = (doc as any).dataUrl  || doc.uri;
           const mimeType = (doc as any).mimeType ?? 'image/jpeg';
           const fileName = (doc as any).fileName ?? `${doc.id}_${Date.now()}.jpg`;
           await apiUploadDocument({ docType: doc.id, label: doc.label, dataUrl, mimeType, fileName });
-          successCount++;
+          return { success: true };
         } catch {
-          failCount++;
+          return { success: false };
         }
-      }
+      });
+
+      const results = await Promise.all(uploadPromises);
+      successCount = results.filter(r => r.success).length;
+      failCount = results.filter(r => !r.success).length;
 
       // Mark locally as submitted
       const updated = docs.map(d => ({ ...d, submitted: true }));

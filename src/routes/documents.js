@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const sharp = require('sharp');
 
 const Document = require('../models/Document');
 const PSWProfile = require('../models/PSWProfile');
@@ -19,9 +20,32 @@ if (process.env.BLOB_READ_WRITE_TOKEN) {
       },
       body,
     });
-    if (!response.ok) throw new Error('Blob upload failed');
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Blob upload failed: ${response.status} - ${errText}`);
+    }
     return { url: `https://public.blob.vercel-storage.com/${pathName}`, pathname: pathName };
   };
+}
+
+async function compressImage(buffer, mimeType) {
+  if (!mimeType || !mimeType.startsWith('image/')) {
+    return buffer;
+  }
+  
+  try {
+    const compressed = await sharp(buffer)
+      .resize(1920, 1920, { 
+        fit: 'inside', 
+        withoutEnlargement: true 
+      })
+      .jpeg({ quality: 70 })
+      .toBuffer();
+    return compressed;
+  } catch (err) {
+    console.error('Image compression failed:', err);
+    return buffer;
+  }
 }
 
 router.post(
@@ -42,23 +66,48 @@ router.post(
       if (!profile) return res.status(404).json({ error: 'PSW profile not found' });
 
       let fileUrl = '', storagePath = '', dataUrl = '';
-      if (blobPut && req.file?.buffer) {
+      let fileBuffer = req.file?.buffer;
+      
+      // Compress image before uploading
+      if (fileBuffer && req.file?.mimetype?.startsWith('image/')) {
         try {
-          const blob = await blobPut(`${profile._id}/${Date.now()}-${req.file.originalname}`, req.file.buffer, { contentType: req.file.mimetype });
-          fileUrl = blob.url;
-          storagePath = blob.pathname;
-        } catch (blobErr) { console.error('Blob upload error:', blobErr); }
+          fileBuffer = await compressImage(fileBuffer, req.file.mimetype);
+        } catch (compressErr) {
+          console.error('Compression error:', compressErr);
+        }
       }
 
-      // Fallback: store as base64 data URL so admin can still view images
-      if (!fileUrl && req.file?.buffer) {
-        dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+      // Try Vercel Blob upload with compressed image
+      if (blobPut && fileBuffer) {
+        try {
+          const ext = req.file.mimetype === 'application/pdf' ? 'pdf' : 'jpg';
+          const blobPath = `${profile._id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+          const blob = await blobPut(blobPath, fileBuffer, { contentType: req.file.mimetype });
+          fileUrl = blob.url;
+          storagePath = blob.pathname;
+        } catch (blobErr) { 
+          console.error('Blob upload error:', blobErr); 
+        }
+      }
+
+      // Minimal fallback: Only store tiny thumbnail for preview, not full base64
+      // This keeps database small and fast
+      if (!fileUrl && fileBuffer && req.file?.mimetype?.startsWith('image/')) {
+        try {
+          const thumbnail = await sharp(fileBuffer)
+            .resize(300, 300, { fit: 'cover' })
+            .jpeg({ quality: 50 })
+            .toBuffer();
+          dataUrl = `data:image/jpeg;base64,${thumbnail.toString('base64')}`;
+        } catch (thumbErr) {
+          console.error('Thumbnail generation failed:', thumbErr);
+        }
       }
 
       const document = await Document.create({
         entityType, entityId: profile._id, docType, label: label || '',
         fileName: req.file.originalname, originalName: req.file.originalname,
-        mimeType: req.file.mimetype, size: req.file.size,
+        mimeType: req.file.mimetype, size: fileBuffer?.length || req.file.size,
         storagePath, url: fileUrl, dataUrl, status: 'PENDING',
       });
 
