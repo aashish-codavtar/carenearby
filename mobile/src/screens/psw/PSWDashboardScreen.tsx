@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Dimensions,
   Image,
   Platform,
   Pressable,
@@ -167,10 +168,7 @@ export function PSWDashboardScreen() {
   const glowOpacity = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.7] });
 
   const QUICK_ACTIONS = [
-    { icon: '📍', label: t.findJobs,   screen: 'NearbyJobs',   gradColors: ['#EFF6FF', '#DBEAFE'] as [string, string], accent: Colors.systemBlue },
-    { icon: '📋', label: t.myJobs,     screen: 'MyJobs',        gradColors: ['#ECFDF5', '#D1FAE5'] as [string, string], accent: Colors.onlineGreen },
-    { icon: '📄', label: t.documents,  screen: 'PSWDocuments',  gradColors: ['#FFFBEB', '#FEF3C7'] as [string, string], accent: Colors.earningsGold },
-    { icon: '👤', label: t.profile,    screen: 'PSWProfile',    gradColors: ['#F5F3FF', '#EDE9FE'] as [string, string], accent: Colors.systemPurple },
+    { icon: '📄', label: t.documents, screen: 'PSWDocuments', gradColors: ['#FFFBEB', '#FEF3C7'] as [string, string], accent: Colors.earningsGold },
   ];
 
   return (
@@ -184,8 +182,8 @@ export function PSWDashboardScreen() {
     >
       {/* ── Hero ─────────────────────────────────────────────────── */}
       <LinearGradient
-        colors={isOnline ? ['#065F46', '#059669', '#10B981'] : [Colors.heroNavy, Colors.heroNavyLight]}
-        style={[styles.hero, { paddingTop: insets.top + 16 }]}
+        colors={isOnline ? ['#065F46', '#059669', '#10B981'] : ['#1F2937', '#374151', '#4B5563']}
+        style={[styles.hero, { paddingTop: insets.top + 16, minHeight: Dimensions.get('window').height * 0.33 }]}
       >
         <View style={styles.heroTop}>
           <View style={styles.locationPill}>
@@ -198,7 +196,7 @@ export function PSWDashboardScreen() {
             >
               <Text style={styles.langToggleText}>{lang === 'en' ? 'FR' : 'EN'}</Text>
             </Pressable>
-            <Pressable style={styles.avatarBtn} onPress={() => nav.navigate('PSWProfile')}>
+            <Pressable style={styles.avatarBtn} onPress={() => nav.navigate('Profile')}>
               {photoUri
                 ? <Image source={{ uri: photoUri }} style={styles.avatarImg} />
                 : <Text style={styles.avatarBtnText}>{user?.name?.[0]?.toUpperCase() ?? '?'}</Text>
@@ -386,9 +384,9 @@ export function PSWDashboardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.systemGroupedBackground },
 
-  // Hero
-  hero: { paddingHorizontal: 20, paddingBottom: 28 },
-  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  // Hero — edge-to-edge gradient, inner content padded individually
+  hero: { paddingBottom: 28 },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingHorizontal: 20 },
   locationPill: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
   locationText: { color: '#fff', fontSize: 13, fontWeight: '500' },
   langToggle: {
@@ -405,19 +403,19 @@ const styles = StyleSheet.create({
   },
   avatarBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
   avatarImg: { width: 38, height: 38, borderRadius: 19 },
-  heroGreeting: { color: '#fff', fontSize: 28, fontWeight: '900', marginBottom: 4, letterSpacing: -0.5 },
-  heroSub: { color: 'rgba(255,255,255,0.72)', fontSize: 14, marginBottom: 28 },
+  heroGreeting: { color: '#fff', fontSize: 28, fontWeight: '900', marginBottom: 4, letterSpacing: -0.5, paddingHorizontal: 20 },
+  heroSub: { color: 'rgba(255,255,255,0.72)', fontSize: 14, marginBottom: 28, paddingHorizontal: 20 },
 
   // Online toggle
   toggleCenter: { alignItems: 'center', marginBottom: 24, position: 'relative' },
   glowRing: {
     position: 'absolute',
-    width: 140, height: 140, borderRadius: 70,
+    width: 120, height: 120, borderRadius: 60,
     backgroundColor: Colors.onlineGreen,
     top: -10,
   },
   onlineBtn: {
-    width: 124, height: 124, borderRadius: 62,
+    width: 100, height: 100, borderRadius: 50,
     alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 10,
     overflow: 'hidden',
@@ -435,6 +433,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: 18, padding: 16,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    marginHorizontal: 20,
   },
   earningsItem: { flex: 1, alignItems: 'center' },
   earningsNum: { color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
@@ -476,7 +475,7 @@ const styles = StyleSheet.create({
   // Quick actions
   quickActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingHorizontal: 16 },
   quickAction: {
-    flex: 1, minWidth: '44%',
+    flex: 1, minWidth: '100%',
     borderRadius: 18,
     overflow: 'hidden',
     shadowColor: Colors.cardShadow,

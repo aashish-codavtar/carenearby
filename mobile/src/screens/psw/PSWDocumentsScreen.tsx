@@ -15,7 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
-import { apiUploadDocument } from '../../api/client';
+import { apiUploadDocument, apiGetMyDocuments } from '../../api/client';
 import { Storage, StoredDocument } from '../../utils/storage';
 import { Colors } from '../../utils/colors';
 
@@ -42,6 +42,7 @@ export function PSWDocumentsScreen() {
   const [submitted,  setSubmitted]  = useState(false);
   const [uploading,  setUploading]  = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [serverDocs, setServerDocs] = useState<Record<string, { status: string; rejectionReason?: string }>>({});
 
   useEffect(() => {
     Storage.getDocuments().then(d => {
@@ -50,6 +51,11 @@ export function PSWDocumentsScreen() {
       const allRequired = required.every(t => d.find(u => u.id === t.id));
       if (allRequired && d.some(dd => (dd as any).submitted)) setSubmitted(true);
     });
+    apiGetMyDocuments().then(r => {
+      const map: Record<string, { status: string; rejectionReason?: string }> = {};
+      r.documents.forEach(d => { map[d.docType] = { status: d.status, rejectionReason: d.rejectionReason }; });
+      setServerDocs(map);
+    }).catch(() => {});
   }, []);
 
   const uploadedCount = docs.length;
@@ -99,19 +105,7 @@ export function PSWDocumentsScreen() {
       setUploading(null);
     };
 
-    const existing = docs.find(d => d.id === docType.id);
-    if (existing && Platform.OS !== 'web') {
-      Alert.alert(
-        'Replace Document',
-        `You already uploaded ${docType.label}. Replace it?`,
-        [
-          { text: 'Cancel', style: 'cancel', onPress: () => setUploading(null) },
-          { text: 'Replace', onPress: doPickFile },
-        ],
-      );
-    } else {
-      await doPickFile();
-    }
+    await doPickFile();
   }
 
   async function removeDoc(docId: string, label: string) {
@@ -133,55 +127,40 @@ export function PSWDocumentsScreen() {
     if (!canSubmit || submitting) return;
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-    const doSubmit = async () => {
-      setSubmitting(true);
-      let successCount = 0;
-      let failCount = 0;
+    setSubmitting(true);
+    let successCount = 0;
+    let failCount = 0;
 
-      // Upload all documents in PARALLEL for faster performance
-      const uploadPromises = docs.map(async (doc) => {
-        try {
-          const dataUrl  = (doc as any).dataUrl  || doc.uri;
-          const mimeType = (doc as any).mimeType ?? 'image/jpeg';
-          const fileName = (doc as any).fileName ?? `${doc.id}_${Date.now()}.jpg`;
-          await apiUploadDocument({ docType: doc.id, label: doc.label, dataUrl, mimeType, fileName });
-          return { success: true };
-        } catch {
-          return { success: false };
-        }
-      });
-
-      const results = await Promise.all(uploadPromises);
-      successCount = results.filter(r => r.success).length;
-      failCount = results.filter(r => !r.success).length;
-
-      // Mark locally as submitted
-      const updated = docs.map(d => ({ ...d, submitted: true }));
-      for (const d of updated) await Storage.saveDocument(d as any);
-
-      setSubmitted(true);
-      setSubmitting(false);
-
-      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      if (failCount > 0) {
-        const msg = `${successCount} documents sent, ${failCount} failed. Please try again.`;
-        if (Platform.OS === 'web') alert(msg);
-        else Alert.alert('Partial Upload', msg);
+    // Upload all documents in PARALLEL for faster performance
+    const uploadPromises = docs.map(async (doc) => {
+      try {
+        const dataUrl  = (doc as any).dataUrl  || doc.uri;
+        const mimeType = (doc as any).mimeType ?? 'image/jpeg';
+        const fileName = (doc as any).fileName ?? `${doc.id}_${Date.now()}.jpg`;
+        await apiUploadDocument({ docType: doc.id, label: doc.label, dataUrl, mimeType, fileName });
+        return { success: true };
+      } catch {
+        return { success: false };
       }
-    };
+    });
 
-    if (Platform.OS === 'web') {
-      if (window.confirm('Submit your documents for admin review? You will be notified once approved.')) doSubmit();
+    const results = await Promise.all(uploadPromises);
+    successCount = results.filter(r => r.success).length;
+    failCount = results.filter(r => !r.success).length;
+
+    // Mark locally as submitted
+    const updated = docs.map(d => ({ ...d, submitted: true }));
+    for (const d of updated) await Storage.saveDocument(d as any);
+
+    setSubmitting(false);
+
+    if (failCount === 0) {
+      setSubmitted(true);
+      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } else {
-      Alert.alert(
-        'Submit Documents',
-        "Send your uploaded documents to the CareNearby admin team for review? You'll be approved within 1-2 business days.",
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Submit', onPress: doSubmit },
-        ],
-      );
+      const msg = `${successCount} documents sent, ${failCount} failed. Please try again.`;
+      if (Platform.OS === 'web') alert(msg);
+      else Alert.alert('Partial Upload', msg);
     }
   }
 
@@ -272,7 +251,15 @@ export function PSWDocumentsScreen() {
                   <Text style={styles.docCardSub}>{docType.sublabel}</Text>
                   {uploaded && (
                     <Text style={styles.docUploadedDate}>
-                      ✅ Uploaded {new Date(uploaded.uploadedAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      Uploaded {new Date(uploaded.uploadedAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </Text>
+                  )}
+                  {uploaded && serverDocs[docType.id] && (
+                    <Text style={[
+                      styles.docUploadedDate,
+                      { color: serverDocs[docType.id].status === 'APPROVED' ? '#059669' : serverDocs[docType.id].status === 'REJECTED' ? '#DC2626' : '#D97706' }
+                    ]}>
+                      {serverDocs[docType.id].status === 'APPROVED' ? '✅ Admin Approved' : serverDocs[docType.id].status === 'REJECTED' ? `❌ Rejected${serverDocs[docType.id].rejectionReason ? ': ' + serverDocs[docType.id].rejectionReason : ''}` : '⏳ Under Review'}
                     </Text>
                   )}
                 </View>

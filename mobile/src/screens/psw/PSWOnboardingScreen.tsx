@@ -51,8 +51,8 @@ const LANGUAGE_OPTIONS = ['English', 'French', 'Spanish', 'Mandarin', 'Punjabi',
 const STEP4_DOCS = [
   { id: 'police_check',    label: 'Police Check',         icon: '🛡️', required: true },
   { id: 'psw_certificate', label: 'PSW Certificate',      icon: '🏅', required: true },
-  { id: 'first_aid',       label: 'First Aid Certificate', icon: '🚑', required: false },
-  { id: 'id_card',         label: 'Government ID',        icon: '🪪', required: false },
+  { id: 'first_aid_cert',  label: 'First Aid Certificate', icon: '🚑', required: false },
+  { id: 'id_proof',        label: 'Government ID',        icon: '🪪', required: false },
 ];
 
 // ── Step indicator (top-level so it never causes re-mount) ────────────────────

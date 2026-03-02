@@ -283,7 +283,7 @@ export function HomeScreen() {
               >
                 <Text style={styles.langToggleText}>{lang === 'en' ? 'FR' : 'EN'}</Text>
               </Pressable>
-              <Pressable style={styles.avatarBtn} onPress={() => nav.navigate('ProfileTab')}>
+              <Pressable style={styles.avatarBtn} onPress={() => nav.navigate('Profile')}>
                 {photoUri ? (
                   <Image source={{ uri: photoUri }} style={styles.avatarBtnImg} />
                 ) : (

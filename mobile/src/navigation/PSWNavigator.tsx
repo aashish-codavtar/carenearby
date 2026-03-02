@@ -21,6 +21,7 @@ export type PSWStackParams = {
   JobDetail: { job: Booking };
   PSWDocuments: undefined;
   Help: undefined;
+  Profile: undefined;
 };
 
 const Tab = createBottomTabNavigator();
@@ -55,43 +56,59 @@ function PSWTabs() {
         tabBarInactiveTintColor: Colors.systemGray2,
         tabBarShowLabel: false,
         tabBarStyle: {
-          borderTopColor: Colors.separator,
-          borderTopWidth: 1,
+          borderTopColor: 'transparent',
+          borderTopWidth: 0,
           backgroundColor: Colors.systemBackground,
-          height: Platform.OS === 'ios' ? 88 : 66,
-          paddingBottom: Platform.OS === 'ios' ? 20 : 8,
-          shadowColor: Colors.cardShadow,
+          height: Platform.OS === 'ios' ? 92 : 72,
+          paddingBottom: Platform.OS === 'ios' ? 24 : 10,
+          shadowColor: '#000',
           shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.08,
-          shadowRadius: 16,
-          elevation: 12,
+          shadowOpacity: 0.10,
+          shadowRadius: 20,
+          elevation: 16,
         },
       }}
     >
       <Tab.Screen
         name="Dashboard"
         component={PSWDashboardScreen}
-        options={{ tabBarIcon: ({ focused, color }) => <TabIcon emoji="🏠" label="Home" focused={focused} color={color} /> }}
+        options={{
+          tabBarIcon: ({ focused, color }) => <TabIcon emoji="🏠" label="Home" focused={focused} color={color} />,
+        }}
       />
       <Tab.Screen
         name="NearbyJobs"
         component={NearbyJobsScreen}
-        options={{ tabBarIcon: ({ focused, color }) => <TabIcon emoji="📍" label="Find Jobs" focused={focused} color={color} /> }}
+        options={{
+          tabBarLabel: () => null,
+          tabBarIcon: ({ focused }) => (
+            <View style={{
+              width: 58,
+              height: 58,
+              borderRadius: 29,
+              backgroundColor: Colors.onlineGreen,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: -24,
+              shadowColor: Colors.onlineGreen,
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: 0.45,
+              shadowRadius: 14,
+              elevation: 10,
+              borderWidth: 3,
+              borderColor: '#fff',
+            }}>
+              <Text style={{ fontSize: 22, color: '#fff' }}>📍</Text>
+            </View>
+          ),
+        }}
       />
       <Tab.Screen
         name="MyJobs"
         component={MyJobsScreen}
-        options={{ tabBarIcon: ({ focused, color }) => <TabIcon emoji="📋" label="My Jobs" focused={focused} color={color} /> }}
-      />
-      <Tab.Screen
-        name="Earnings"
-        component={EarningsScreen}
-        options={{ tabBarIcon: ({ focused, color }) => <TabIcon emoji="💰" label="Earnings" focused={focused} color={color} /> }}
-      />
-      <Tab.Screen
-        name="PSWProfile"
-        component={ProfileScreen}
-        options={{ tabBarIcon: ({ focused, color }) => <TabIcon emoji="👤" label="Profile" focused={focused} color={color} /> }}
+        options={{
+          tabBarIcon: ({ focused, color }) => <TabIcon emoji="📋" label="My Jobs" focused={focused} color={color} />,
+        }}
       />
     </Tab.Navigator>
   );
@@ -116,6 +133,7 @@ export function PSWNavigator() {
       <Stack.Screen name="JobDetail" component={JobDetailScreen} options={{ headerShown: false }} />
       <Stack.Screen name="PSWDocuments" component={PSWDocumentsScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Help" component={HelpScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }

@@ -266,10 +266,7 @@ export function ProfileScreen() {
                     { icon: '👮', label: 'Admin Approved',   ok: pswP.approvedByAdmin },
                   ].map(item => (
                     <View key={item.label} style={styles.checkCell}>
-                      <Text style={styles.checkCellIcon}>{item.icon}</Text>
-                      <Text style={[styles.checkCellStatus, { color: item.ok ? '#16A34A' : '#EA580C' }]}>
-                        {item.ok ? '✅' : '⏳'}
-                      </Text>
+                      <Text style={styles.checkCellIcon}>{item.ok ? item.icon : '⏳'}</Text>
                       <Text style={styles.checkCellLabel}>{item.label}</Text>
                     </View>
                   ))}

@@ -43,33 +43,40 @@ function loadLeaflet(): Promise<void> {
 function PSWMapWeb({ psws }: { psws: AvailablePSW[] }) {
   const containerRef = useRef<any>(null);
   const mapRef = useRef<any>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     loadLeaflet().then(() => {
       if (!containerRef.current || mapRef.current) return;
-      const L = window.L;
-      const map = L.map(containerRef.current, { zoomControl: true, attributionControl: false })
-        .setView([46.4917, -80.9924], 11);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+      try {
+        const L = window.L;
+        const map = L.map(containerRef.current, { zoomControl: true, attributionControl: false })
+          .setView([46.4917, -80.9924], 11);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
 
-      const pswIcon = L.divIcon({
-        html: '<div style="background:#007AFF;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,122,255,0.5)"></div>',
-        className: '',
-        iconAnchor: [8, 8],
-      });
+        const pswIcon = L.divIcon({
+          html: '<div style="background:#007AFF;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,122,255,0.5)"></div>',
+          className: '',
+          iconAnchor: [8, 8],
+        });
 
-      psws.forEach(p => {
-        L.marker([p.lat, p.lng], { icon: pswIcon })
-          .addTo(map)
-          .bindPopup(`<b>${p.qualificationType}</b><br>⭐ ${p.rating.toFixed(1)}`);
-      });
+        psws.forEach(p => {
+          L.marker([p.lat, p.lng], { icon: pswIcon })
+            .addTo(map)
+            .bindPopup(`<b>${p.qualificationType}</b><br>⭐ ${p.rating.toFixed(1)}`);
+        });
 
-      mapRef.current = map;
-    });
+        mapRef.current = map;
+      } catch {
+        setFailed(true);
+      }
+    }).catch(() => setFailed(true));
     return () => {
       if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
     };
   }, [psws]);
+
+  if (failed) return null;
 
   return (
     <div

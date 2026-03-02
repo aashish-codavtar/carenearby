@@ -179,6 +179,10 @@ export async function apiUploadDocument(payload: { docType: string; label: strin
   return json as { message: string; document: { id: string; docType: string; status: string; url: string; submittedAt: string } };
 }
 
+export function apiGetMyDocuments() {
+  return request<{ documents: Array<{ _id: string; docType: string; label: string; status: 'PENDING' | 'APPROVED' | 'REJECTED'; url?: string; submittedAt: string; rejectionReason?: string }> }>('GET', '/documents/my-documents');
+}
+
 // ─── Admin ────────────────────────────────────────────────────────────────────
 
 export function apiGetPSWs(approved?: boolean) {

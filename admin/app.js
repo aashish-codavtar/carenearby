@@ -4,6 +4,8 @@ let token = localStorage.getItem('adminToken');
 let currentPage = 'dashboard';
 let currentDoc = null;
 let currentPSW = null;
+let currentBooking = null;
+let _bookings = [];
 let _loggingOut = false;  // guard against concurrent logout calls
 
 // Decode the exp claim from a JWT without verifying signature (client-side only)
@@ -213,7 +215,14 @@ async function viewPSW(pswId) {
         <div class="psw-detail-section"><h4>Experience</h4><p>${p.profile?.experienceYears || 0} yrs</p></div>
         <div class="psw-detail-section"><h4>Police Check</h4><p>${p.profile?.policeCheckCleared ? '✅ Cleared' : '❌ Not cleared'}</p></div>
         <div class="psw-detail-section"><h4>Status</h4><p><span class="badge badge-${isApproved ? 'approved' : 'pending'}">${isApproved ? 'Approved' : 'Pending'}</span></p></div>
+        <div class="psw-detail-section"><h4>First Aid Certified</h4><p>${p.profile?.firstAidCertified ? '✅ Yes' : '❌ No'}</p></div>
+        <div class="psw-detail-section"><h4>Driver's Licence</h4><p>${p.profile?.driversLicense ? '✅ Yes' : '❌ No'}</p></div>
+        <div class="psw-detail-section"><h4>Own Transport</h4><p>${p.profile?.ownTransportation ? '✅ Yes' : '❌ No'}</p></div>
+        <div class="psw-detail-section"><h4>Insurance Verified</h4><p>${p.profile?.insuranceVerified ? '✅ Verified' : '❌ Not verified'}</p></div>
+        <div class="psw-detail-section"><h4>Languages</h4><p>${(p.profile?.languages || ['English']).join(', ')}</p></div>
+        <div class="psw-detail-section"><h4>Specialties</h4><p>${p.profile?.specialties?.length ? p.profile.specialties.join(', ') : 'None listed'}</p></div>
       </div>
+      ${p.profile?.bio ? `<div style="margin:12px 0;padding:12px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;"><h4 style="margin:0 0 6px;color:#374151;">Bio</h4><p style="margin:0;color:#6b7280;">${p.profile.bio}</p></div>` : ''}
       <hr style="margin:16px 0;border:none;border-top:1px solid #e5e7eb;">
       <h4 style="margin-bottom:12px;color:#374151;">Documents (${docsData.documents?.length || 0})</h4>
       ${docsData.documents?.length ? docsData.documents.map(d => {
@@ -434,15 +443,16 @@ async function loadBookings() {
 }
 
 function renderBookings(bookings) {
+  _bookings = bookings;
   const tbody = document.querySelector('#bookings-table tbody');
   if (!bookings.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="loading">No bookings found</td></tr>';
     return;
   }
-  
+
   tbody.innerHTML = bookings.map(b => `
     <tr>
-      <td>${b._id.slice(-8)}</td>
+      <td><a href="#" onclick="viewBooking('${b._id}');return false;" style="font-family:monospace;color:#2563eb;">${b._id.slice(-8)}</a></td>
       <td>${b.serviceType}</td>
       <td>${b.customer?.name || 'N/A'}</td>
       <td>${b.psw?.name || 'Unassigned'}</td>
@@ -450,6 +460,29 @@ function renderBookings(bookings) {
       <td>${new Date(b.scheduledAt).toLocaleDateString()}</td>
     </tr>
   `).join('');
+}
+
+function viewBooking(bookingId) {
+  const b = _bookings.find(x => x._id === bookingId);
+  if (!b) return;
+  currentBooking = b;
+  const psw = b.psw || b.pswId;
+  const customer = b.customer || b.customerId;
+  document.getElementById('booking-modal-body').innerHTML = `
+    <div class="psw-info-grid">
+      <div class="psw-detail-section"><h4>Booking ID</h4><p style="font-family:monospace">${b._id}</p></div>
+      <div class="psw-detail-section"><h4>Service</h4><p>${b.serviceType}</p></div>
+      <div class="psw-detail-section"><h4>Status</h4><p><span class="badge badge-${b.status.toLowerCase()}">${b.status}</span></p></div>
+      <div class="psw-detail-section"><h4>Date</h4><p>${new Date(b.scheduledAt).toLocaleString()}</p></div>
+      <div class="psw-detail-section"><h4>Hours</h4><p>${b.hours || 'N/A'}</p></div>
+      <div class="psw-detail-section"><h4>Total</h4><p>$${b.totalPrice ?? b.price ?? 'N/A'}</p></div>
+      <div class="psw-detail-section"><h4>Customer</h4><p>${customer?.name || 'N/A'} · ${customer?.phone || ''}</p></div>
+      <div class="psw-detail-section"><h4>PSW</h4><p>${psw?.name || 'Unassigned'} · ${psw?.phone || ''}</p></div>
+      <div class="psw-detail-section"><h4>Address</h4><p>${b.address || 'N/A'}</p></div>
+    </div>
+    ${b.notes ? `<div style="margin-top:16px;padding:14px;background:#f0f9ff;border-radius:8px;border:1px solid #bae6fd;"><h4 style="margin:0 0 8px;color:#0369a1;">Notes</h4><p style="margin:0;color:#374151;white-space:pre-wrap;">${b.notes}</p></div>` : '<p style="color:#9ca3af;margin-top:12px;">No notes for this booking.</p>'}
+  `;
+  document.getElementById('booking-modal').classList.remove('hidden');
 }
 
 // Audit
