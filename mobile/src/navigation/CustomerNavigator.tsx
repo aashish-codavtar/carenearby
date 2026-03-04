@@ -14,7 +14,6 @@ import { Booking } from '../api/client';
 export type CustomerStackParams = {
   Home: undefined;
   BookingDetail: { booking: Booking };
-  NewBooking: undefined;
   Help: undefined;
   Profile: undefined;
 };
@@ -120,7 +119,6 @@ export function CustomerNavigator() {
       <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Help" component={HelpScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="NewBooking" component={CreateBookingScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }
