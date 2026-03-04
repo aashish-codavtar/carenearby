@@ -81,19 +81,23 @@ export function PSWDocumentsScreen() {
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           allowsEditing: false,
-          quality: 0.5, // Lower quality = smaller file = faster upload
-          base64: false, // Don't get base64 - we'll use URI directly
+          quality: 0.4,
+          // On web blob: URLs expire when navigating away — get base64 immediately so
+          // the data survives until the user hits Submit.
+          base64: Platform.OS === 'web',
         });
         if (!result.canceled && result.assets[0]) {
           const asset = result.assets[0];
-          // Store minimal data - just URI reference (not full base64)
-          // This is much faster and uses less storage
           const mimeType = asset.mimeType ?? 'image/jpeg';
-          
+          // Web: use stable data URL; native: use file URI (persists on disk)
+          const stableUri = (Platform.OS === 'web' && asset.base64)
+            ? `data:${mimeType};base64,${asset.base64}`
+            : asset.uri;
+
           const doc: StoredDocument = {
             id:         docType.id,
             label:      docType.label,
-            uri:        asset.uri,
+            uri:        stableUri,
             uploadedAt: new Date().toISOString(),
           };
           await Storage.saveDocument(doc);

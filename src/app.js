@@ -21,7 +21,19 @@ const app = express();
 app.set('trust proxy', 1);
 
 // ── Security middleware ────────────────────────────────────────────────────────
-app.use(helmet());   // Sets secure HTTP response headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc:  ["'self'"],
+      scriptSrc:   ["'self'", "'unsafe-inline'"],   // admin panel uses inline onclick handlers
+      styleSrc:    ["'self'", "'unsafe-inline'"],
+      imgSrc:      ["'self'", "data:", "https:", "blob:"],
+      connectSrc:  ["'self'", "https:"],
+      fontSrc:     ["'self'", "https:", "data:"],
+      objectSrc:   ["'none'"],
+    },
+  },
+}));
 
 // CORS – allow requests from Expo Go (native fetch has no CORS restrictions, but
 // this is needed for any web-based admin panel or Postman/browser testing).
