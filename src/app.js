@@ -25,8 +25,8 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:  ["'self'"],
-      scriptSrc:   ["'self'", "'unsafe-inline'"],   // admin panel uses inline onclick handlers
-      styleSrc:    ["'self'", "'unsafe-inline'"],
+      scriptSrc:   ["'self'", "'unsafe-inline'", "https://unpkg.com"],   // admin panel uses inline onclick handlers; unpkg.com for Leaflet
+      styleSrc:    ["'self'", "'unsafe-inline'", "https://unpkg.com"],
       imgSrc:      ["'self'", "data:", "https:", "blob:"],
       connectSrc:  ["'self'", "https:"],
       fontSrc:     ["'self'", "https:", "data:"],
