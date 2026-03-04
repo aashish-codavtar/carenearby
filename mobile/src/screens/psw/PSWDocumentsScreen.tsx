@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
@@ -44,6 +44,7 @@ export function PSWDocumentsScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [serverDocs, setServerDocs] = useState<Record<string, { status: string; rejectionReason?: string }>>({});
 
+  // Load local docs once on mount
   useEffect(() => {
     Storage.getDocuments().then(d => {
       setDocs(d);
@@ -51,12 +52,16 @@ export function PSWDocumentsScreen() {
       const allRequired = required.every(t => d.find(u => u.id === t.id));
       if (allRequired && d.some(dd => (dd as any).submitted)) setSubmitted(true);
     });
+  }, []);
+
+  // Refresh server doc status every time the screen is focused (so admin approvals show instantly)
+  useFocusEffect(useCallback(() => {
     apiGetMyDocuments().then(r => {
       const map: Record<string, { status: string; rejectionReason?: string }> = {};
       r.documents.forEach(d => { map[d.docType] = { status: d.status, rejectionReason: d.rejectionReason }; });
       setServerDocs(map);
     }).catch(() => {});
-  }, []);
+  }, []));
 
   const uploadedCount = docs.length;
   const requiredDone  = DOC_TYPES.filter(t => t.required && docs.find(d => d.id === t.id)).length;
@@ -131,9 +136,17 @@ export function PSWDocumentsScreen() {
     if (!canSubmit || submitting) return;
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
+    // Detect stale blob: URLs — these expire after navigation and must be re-selected
+    const blobDocs = docs.filter(d => d.uri && d.uri.startsWith('blob:'));
+    if (blobDocs.length > 0) {
+      const names = blobDocs.map(d => d.label).join(', ');
+      const msg = `Please re-select these photos — they expired after navigating away:\n\n${names}\n\nTap "↑ Replace" on each to pick them again.`;
+      if (Platform.OS === 'web') alert(msg);
+      else Alert.alert('Re-select Required', msg);
+      return;
+    }
+
     setSubmitting(true);
-    let successCount = 0;
-    let failCount = 0;
 
     // Upload all documents in PARALLEL for faster performance
     const uploadPromises = docs.map(async (doc) => {
@@ -142,15 +155,15 @@ export function PSWDocumentsScreen() {
         const mimeType = (doc as any).mimeType ?? 'image/jpeg';
         const fileName = (doc as any).fileName ?? `${doc.id}_${Date.now()}.jpg`;
         await apiUploadDocument({ docType: doc.id, label: doc.label, dataUrl, mimeType, fileName });
-        return { success: true };
+        return { success: true, label: doc.label };
       } catch {
-        return { success: false };
+        return { success: false, label: doc.label };
       }
     });
 
     const results = await Promise.all(uploadPromises);
-    successCount = results.filter(r => r.success).length;
-    failCount = results.filter(r => !r.success).length;
+    const succeeded = results.filter(r => r.success);
+    const failed    = results.filter(r => !r.success);
 
     // Mark locally as submitted
     const updated = docs.map(d => ({ ...d, submitted: true }));
@@ -158,11 +171,12 @@ export function PSWDocumentsScreen() {
 
     setSubmitting(false);
 
-    if (failCount === 0) {
+    if (failed.length === 0) {
       setSubmitted(true);
       if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } else {
-      const msg = `${successCount} documents sent, ${failCount} failed. Please try again.`;
+      const failedNames = failed.map(r => r.label).join(', ');
+      const msg = `${succeeded.length} uploaded successfully.\n\nFailed (please try again):\n${failedNames}`;
       if (Platform.OS === 'web') alert(msg);
       else Alert.alert('Partial Upload', msg);
     }
