@@ -57,7 +57,16 @@ export function OTPScreen() {
   }
 
   function handleDigitChange(idx: number, val: string) {
-    const digit = val.replace(/\D/g, '').slice(-1);
+    // Handle paste or SMS auto-fill of full OTP (e.g. "123456")
+    const clean = val.replace(/\D/g, '');
+    if (clean.length === OTP_LENGTH) {
+      const next = clean.split('');
+      setDigits(next);
+      inputRefs.current[OTP_LENGTH - 1]?.focus();
+      verify(clean);
+      return;
+    }
+    const digit = clean.slice(-1);
     const next = [...digits];
     next[idx] = digit;
     setDigits(next);
@@ -149,7 +158,9 @@ export function OTPScreen() {
                 onChangeText={v => handleDigitChange(i, v)}
                 onKeyPress={({ nativeEvent }) => handleKeyPress(i, nativeEvent.key)}
                 keyboardType="number-pad"
-                maxLength={1}
+                maxLength={i === 0 ? OTP_LENGTH : 1}
+                textContentType="oneTimeCode"
+                autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
                 selectTextOnFocus
                 returnKeyType="done"
               />

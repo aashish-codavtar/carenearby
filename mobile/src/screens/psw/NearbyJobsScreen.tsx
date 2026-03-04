@@ -200,13 +200,33 @@ export function NearbyJobsScreen() {
   const [searchText, setSearchText] = useState('');
   const [serviceFilter, setServiceFilter] = useState<string | null>(null);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
-  const coordsRef = useRef<{ lat: number; lng: number } | undefined>(undefined);
+  const coordsRef   = useRef<{ lat: number; lng: number } | undefined>(undefined);
+  const knownJobIds = useRef<Set<string>>(new Set());
+
+  // Request browser notification permission once on mount (web only)
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
 
   const load = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
     else setLoading(true);
     try {
       const { bookings } = await apiNearbyJobs(coordsRef.current);
+      // Fire browser notification when new jobs appear during background polling
+      if (knownJobIds.current.size > 0) {
+        const newJobs = bookings.filter(j => !knownJobIds.current.has(j._id));
+        if (newJobs.length > 0 && Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+          const j = newJobs[0];
+          new Notification(`New job nearby — $${j.totalPrice}`, {
+            body: `${j.serviceType} · ${j.hours}h · ${j.address || 'Greater Sudbury'}`,
+            icon: '/icon-192.png',
+          });
+        }
+      }
+      knownJobIds.current = new Set(bookings.map(j => j._id));
       setJobs(bookings);
     } catch {}
     setLoading(false);

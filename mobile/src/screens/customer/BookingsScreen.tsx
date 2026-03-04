@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,10 +27,40 @@ function filterBookings(bookings: Booking[], filter: Filter) {
 export function BookingsScreen() {
   const nav    = useNavigation<any>();
   const insets = useSafeAreaInsets();
-  const [bookings,   setBookings]   = useState<Booking[]>([]);
-  const [filter,     setFilter]     = useState<Filter>('ALL');
-  const [loading,    setLoading]    = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [bookings,          setBookings]          = useState<Booking[]>([]);
+  const [filter,            setFilter]            = useState<Filter>('ALL');
+  const [loading,           setLoading]           = useState(true);
+  const [refreshing,        setRefreshing]        = useState(false);
+  const [installPrompt,     setInstallPrompt]     = useState<any>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [showIOSHint,       setShowIOSHint]       = useState(false);
+
+  // Android/Chrome: capture beforeinstallprompt to show custom install button
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const isStandalone = (window.navigator as any).standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+    if (isStandalone) return;
+    const handler = (e: any) => { e.preventDefault(); setInstallPrompt(e); setShowInstallBanner(true); };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  // iOS: show share hint once
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const isStandalone = (window.navigator as any).standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+    if (isStandalone) return;
+    const ua = navigator.userAgent;
+    const isIOS = (/iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) && !(window as any).MSStream;
+    if (isIOS) setShowIOSHint(true);
+  }, []);
+
+  async function handleInstall() {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') setShowInstallBanner(false);
+  }
 
   const load = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
@@ -91,6 +121,29 @@ export function BookingsScreen() {
           ))}
         </View>
       </LinearGradient>
+
+      {/* Android PWA install banner */}
+      {showInstallBanner && (
+        <View style={styles.installBanner}>
+          <Text style={styles.installBannerText}>📲  Add CareNearby to your home screen</Text>
+          <Pressable onPress={handleInstall} style={styles.installBannerBtn}>
+            <Text style={styles.installBannerBtnText}>Install</Text>
+          </Pressable>
+          <Pressable onPress={() => setShowInstallBanner(false)} style={styles.installBannerDismiss} hitSlop={10}>
+            <Text style={styles.installBannerDismissText}>✕</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* iOS install hint */}
+      {showIOSHint && !showInstallBanner && (
+        <View style={styles.iosHint}>
+          <Text style={styles.iosHintText}>Tap Share ⎙ → "Add to Home Screen" to install the app</Text>
+          <Pressable onPress={() => setShowIOSHint(false)} style={styles.installBannerDismiss} hitSlop={10}>
+            <Text style={styles.installBannerDismissText}>✕</Text>
+          </Pressable>
+        </View>
+      )}
 
       <FlatList
         data={loading ? [] : filtered}
@@ -165,6 +218,26 @@ const styles = StyleSheet.create({
   filterPillActive: { backgroundColor: '#fff' },
   filterText: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.8)' },
   filterTextActive: { color: Colors.heroNavy },
+
+  // Install banners
+  installBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#0D2042', paddingHorizontal: 16, paddingVertical: 12,
+  },
+  installBannerText: { flex: 1, color: '#fff', fontSize: 13, fontWeight: '600' },
+  installBannerBtn: {
+    backgroundColor: Colors.systemBlue, borderRadius: 8,
+    paddingHorizontal: 14, paddingVertical: 7,
+  },
+  installBannerBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  installBannerDismiss: { padding: 4 },
+  installBannerDismissText: { color: 'rgba(255,255,255,0.5)', fontSize: 16 },
+  iosHint: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#F0F7FF', paddingHorizontal: 16, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: '#BFDBFE',
+  },
+  iosHintText: { flex: 1, color: '#1E40AF', fontSize: 13, fontWeight: '500' },
 
   statsCard: {
     flexDirection: 'row', marginHorizontal: 16, marginTop: 16, marginBottom: 4,
