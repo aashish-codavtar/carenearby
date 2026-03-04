@@ -5,7 +5,6 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 import { BookingDetailScreen } from '../screens/customer/BookingDetailScreen';
 import { BookingsScreen } from '../screens/customer/BookingsScreen';
 import { CreateBookingScreen } from '../screens/customer/CreateBookingScreen';
-import { HomeScreen } from '../screens/customer/HomeScreen';
 import { HelpScreen } from '../screens/shared/HelpScreen';
 import { ProfileScreen } from '../screens/shared/ProfileScreen';
 import { Colors } from '../utils/colors';
@@ -65,9 +64,9 @@ function HomeTabs() {
       }}
     >
       <Tab.Screen
-        name="HomeTab"
-        component={HomeScreen}
-        options={{ tabBarIcon: ({ focused, color }) => <TabIcon emoji="🏠" label="Home" focused={focused} color={color} /> }}
+        name="BookingsTab"
+        component={BookingsScreen}
+        options={{ tabBarIcon: ({ focused, color }) => <TabIcon emoji="📋" label="My Bookings" focused={focused} color={color} /> }}
       />
       <Tab.Screen
         name="NewBooking"
@@ -97,9 +96,9 @@ function HomeTabs() {
         }}
       />
       <Tab.Screen
-        name="BookingsTab"
-        component={BookingsScreen}
-        options={{ tabBarIcon: ({ focused, color }) => <TabIcon emoji="📋" label="Bookings" focused={focused} color={color} /> }}
+        name="HelpTab"
+        component={HelpScreen}
+        options={{ tabBarIcon: ({ focused, color }) => <TabIcon emoji="❓" label="Help" focused={focused} color={color} /> }}
       />
     </Tab.Navigator>
   );
