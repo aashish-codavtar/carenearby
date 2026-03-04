@@ -98,7 +98,7 @@ function PSWTabs() {
               borderWidth: 3,
               borderColor: '#fff',
             }}>
-              <Text style={{ fontSize: 22, color: '#fff', lineHeight: 26, textAlign: 'center' }}>📍</Text>
+              <Text style={{ fontSize: 24, color: '#fff', textAlign: 'center', includeFontPadding: false }}>📍</Text>
             </View>
           ),
         }}
