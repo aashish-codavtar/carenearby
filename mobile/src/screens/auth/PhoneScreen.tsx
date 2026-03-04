@@ -19,6 +19,11 @@ import { Colors } from '../../utils/colors';
 
 type Role = 'CUSTOMER' | 'PSW';
 
+const ROLES: { key: Role; label: string; sub: string; icon: string; color: string }[] = [
+  { key: 'CUSTOMER', label: 'Client',           sub: 'Book professional PSW care', icon: '🛡️', color: Colors.systemBlue },
+  { key: 'PSW',      label: 'PSW Professional', sub: 'Find clients & earn income',  icon: '💼', color: Colors.onlineGreen },
+];
+
 export function PhoneScreen() {
   const nav    = useNavigation<any>();
   const insets = useSafeAreaInsets();
@@ -36,7 +41,9 @@ export function PhoneScreen() {
   }
 
   function formatName(raw: string) {
-    return raw.replace(/\b\w/g, c => c.toUpperCase()).slice(0, 50);
+    return raw
+      .replace(/\b\w/g, c => c.toUpperCase())
+      .slice(0, 50);
   }
 
   function getE164() {
@@ -66,94 +73,70 @@ export function PhoneScreen() {
     setLoading(false);
   }
 
-  const valid = isValid();
-
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      {/* ── Hero ─────────────────────────────────────────────────────── */}
-      <LinearGradient
-        colors={['#060D1F', '#0A1A3A', '#0D2D6B']}
-        start={{ x: 0.2, y: 0 }}
-        end={{ x: 0.8, y: 1 }}
-        style={styles.hero}
-      >
-        {/* Brand mark */}
-        <View style={styles.brandRow}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* ── Compact top bar ─────────────────────────────────────────── */}
+      <View style={styles.topBar}>
+        <View style={styles.logoRow}>
           <LinearGradient
-            colors={['#3B82F6', '#1D4ED8']}
-            style={styles.brandMark}
+            colors={['#1A6FFF', '#0044CC']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.logoIcon}
           >
-            <Text style={styles.brandMarkText}>CN</Text>
+            <Text style={styles.logoText}>C</Text>
+            <View style={styles.logoBadge}><Text style={styles.logoBadgeText}>✚</Text></View>
           </LinearGradient>
           <View>
-            <Text style={styles.brandName}>CareNearby</Text>
-            <Text style={styles.brandLocation}>Greater Sudbury, ON  🇨🇦</Text>
+            <Text style={styles.appName}>CareNearby</Text>
+            <Text style={styles.tagline}>Greater Sudbury, ON</Text>
           </View>
         </View>
+      </View>
 
-        {/* Hero headline */}
-        <Text style={styles.heroHeadline}>Professional PSW{'\n'}Care at Home</Text>
-
-        {/* Trust pills */}
-        <View style={styles.pillRow}>
-          {[
-            { icon: '✓', label: 'Verified PSWs' },
-            { icon: '✓', label: 'Background Checked' },
-            { icon: '✓', label: '$25/hr' },
-          ].map(p => (
-            <View key={p.label} style={styles.pill}>
-              <Text style={styles.pillIcon}>{p.icon}</Text>
-              <Text style={styles.pillText}>{p.label}</Text>
-            </View>
-          ))}
-        </View>
-      </LinearGradient>
-
-      {/* ── Form card ────────────────────────────────────────────────── */}
+      {/* ── Form ────────────────────────────────────────────────────── */}
       <KeyboardAvoidingView
-        style={styles.formOuter}
+        style={styles.formContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
+          style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.card}>
-            {/* Tab toggle */}
-            <View style={styles.tabRow}>
-              {[
-                { label: 'New User', value: true },
-                { label: 'Sign In',  value: false },
-              ].map(t => (
+          <View style={styles.formCard}>
+            <Text style={styles.formTitle}>Get Started</Text>
+            <Text style={styles.formSub}>Enter your phone number to continue</Text>
+
+            {/* New / Returning toggle */}
+            <View style={styles.toggleRow}>
+              {[{ label: 'New User', value: true }, { label: 'Returning', value: false }].map(t => (
                 <Pressable
                   key={t.label}
-                  style={[styles.tab, isNewUser === t.value && styles.tabActive]}
+                  style={[styles.toggleBtn, isNewUser === t.value && styles.toggleBtnActive]}
                   onPress={() => {
                     if (Platform.OS !== 'web') Haptics.selectionAsync();
                     setIsNewUser(t.value);
                   }}
                 >
-                  <Text style={[styles.tabText, isNewUser === t.value && styles.tabTextActive]}>
+                  <Text style={[styles.toggleText, isNewUser === t.value && styles.toggleTextActive]}>
                     {t.label}
                   </Text>
                 </Pressable>
               ))}
             </View>
 
-            <Text style={styles.cardTitle}>{isNewUser ? 'Create Account' : 'Welcome Back'}</Text>
-            <Text style={styles.cardSub}>{isNewUser ? 'Join thousands of families in Sudbury' : 'Enter your phone number to continue'}</Text>
-
-            {/* Name (new users only) */}
+            {/* Name */}
             {isNewUser && (
-              <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Full Name</Text>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Full Name</Text>
                 <TextInput
-                  style={styles.input}
+                  style={styles.textInput}
                   value={name}
                   onChangeText={v => setName(formatName(v))}
-                  placeholder="Jane Smith"
-                  placeholderTextColor="#C0C0C8"
+                  placeholder="Enter your full name"
+                  placeholderTextColor="#999"
                   autoCapitalize="words"
                   autoCorrect={false}
                   returnKeyType="next"
@@ -162,18 +145,19 @@ export function PhoneScreen() {
             )}
 
             {/* Phone */}
-            <View style={styles.field}>
-              <Text style={styles.fieldLabel}>Mobile Number</Text>
-              <View style={styles.phoneWrap}>
-                <View style={styles.countryChip}>
-                  <Text style={styles.countryChipText}>+1</Text>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Phone Number</Text>
+              <View style={styles.phoneRow}>
+                <View style={styles.countryBadge}>
+                  <Text style={styles.countryFlag}>🇨🇦</Text>
+                  <Text style={styles.countryCode}>+1</Text>
                 </View>
                 <TextInput
-                  style={styles.phoneInput}
+                  style={[styles.textInput, styles.phoneInput]}
                   value={phone}
-                  onChangeText={v => setPhone(formatPhone(v))}
+                  onChangeText={t => setPhone(formatPhone(t))}
                   placeholder="416-555-0100"
-                  placeholderTextColor="#C0C0C8"
+                  placeholderTextColor="#999"
                   keyboardType="phone-pad"
                   maxLength={12}
                   returnKeyType="done"
@@ -182,68 +166,78 @@ export function PhoneScreen() {
               </View>
             </View>
 
-            {/* Role cards (new users only) */}
+            {/* Role selection */}
             {isNewUser && (
-              <View style={styles.field}>
-                <Text style={styles.fieldLabel}>I am a</Text>
-                <View style={styles.roleGrid}>
-                  {/* Client card */}
-                  <Pressable
-                    style={[styles.roleCard, role === 'CUSTOMER' && styles.roleCardActiveBlue]}
-                    onPress={() => { if (Platform.OS !== 'web') Haptics.selectionAsync(); setRole('CUSTOMER'); }}
-                  >
-                    <View style={[styles.roleIconBox, role === 'CUSTOMER' ? styles.roleIconBoxBlue : styles.roleIconBoxGray]}>
-                      <Text style={styles.roleIconText}>C</Text>
-                    </View>
-                    <Text style={[styles.roleTitle, role === 'CUSTOMER' && { color: '#1D4ED8' }]}>Client</Text>
-                    <Text style={styles.roleSub}>Book PSW care</Text>
-                    {role === 'CUSTOMER' && <View style={styles.roleCheckBlue}><Text style={styles.roleCheckMark}>✓</Text></View>}
-                  </Pressable>
-
-                  {/* PSW card */}
-                  <Pressable
-                    style={[styles.roleCard, role === 'PSW' && styles.roleCardActiveGreen]}
-                    onPress={() => { if (Platform.OS !== 'web') Haptics.selectionAsync(); setRole('PSW'); }}
-                  >
-                    <View style={[styles.roleIconBox, role === 'PSW' ? styles.roleIconBoxGreen : styles.roleIconBoxGray]}>
-                      <Text style={styles.roleIconText}>P</Text>
-                    </View>
-                    <Text style={[styles.roleTitle, role === 'PSW' && { color: '#059669' }]}>PSW Worker</Text>
-                    <Text style={styles.roleSub}>Find clients</Text>
-                    {role === 'PSW' && <View style={styles.roleCheckGreen}><Text style={styles.roleCheckMark}>✓</Text></View>}
-                  </Pressable>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>I am a</Text>
+                <View style={styles.roleRow}>
+                  {ROLES.map(r => {
+                    const selected = role === r.key;
+                    return (
+                      <Pressable
+                        key={r.key}
+                        style={[
+                          styles.roleCard,
+                          selected && [styles.roleCardSelected, { borderColor: r.color }],
+                        ]}
+                        onPress={() => {
+                          if (Platform.OS !== 'web') Haptics.selectionAsync();
+                          setRole(r.key);
+                        }}
+                      >
+                        <View style={[styles.roleIconWrap, { backgroundColor: r.color + '18' }]}>
+                          <Text style={styles.roleIcon}>{r.icon}</Text>
+                        </View>
+                        <Text style={[styles.roleLabel, selected && { color: r.color }]}>{r.label}</Text>
+                        <Text style={styles.roleSub} numberOfLines={2}>{r.sub}</Text>
+                        {selected && (
+                          <View style={[styles.roleCheck, { backgroundColor: r.color }]}>
+                            <Text style={styles.roleCheckText}>✓</Text>
+                          </View>
+                        )}
+                      </Pressable>
+                    );
+                  })}
                 </View>
               </View>
             )}
 
             {/* CTA */}
             <Pressable
+              style={({ pressed }) => [
+                styles.ctaBtn,
+                !isValid() && styles.ctaBtnDisabled,
+                pressed && isValid() && { opacity: 0.88, transform: [{ scale: 0.98 }] },
+              ]}
               onPress={sendOTP}
-              disabled={!valid || loading}
-              style={({ pressed }) => [styles.cta, pressed && valid && { opacity: 0.88 }]}
+              disabled={!isValid() || loading}
             >
-              <LinearGradient
-                colors={valid && !loading ? ['#2563EB', '#1D4ED8'] : ['#D1D5DB', '#9CA3AF']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.ctaGrad}
-              >
-                <Text style={styles.ctaText}>{loading ? 'Sending code…' : 'Continue'}</Text>
-                {!loading && <Text style={styles.ctaArrow}>→</Text>}
-              </LinearGradient>
+              <Text style={styles.ctaBtnText}>{loading ? 'Sending…' : 'Continue'}</Text>
+              {!loading && (
+                <View style={styles.ctaArrow}>
+                  <Text style={styles.ctaArrowText}>→</Text>
+                </View>
+              )}
             </Pressable>
 
             <Text style={styles.disclaimer}>
-              We'll send a 6-digit code via SMS · Standard rates apply
+              You'll receive an SMS with a verification code.{'\n'}Standard rates may apply.
             </Text>
           </View>
 
-          {/* Bottom strip */}
-          <View style={styles.bottomStrip}>
-            <Text style={styles.bottomStripText}>
-              Trusted by families across Greater Sudbury · © {new Date().getFullYear()} CareNearby
-            </Text>
+          {/* Trust strip */}
+          <View style={styles.trustStrip}>
+            {[['🛡️', 'Verified PSWs'], ['📍', 'Greater Sudbury'], ['💳', 'Private Pay']].map(([icon, label]) => (
+              <View key={label} style={styles.trustItem}>
+                <Text style={styles.trustIcon}>{icon}</Text>
+                <Text style={styles.trustText}>{label}</Text>
+              </View>
+            ))}
           </View>
+
+          <Text style={styles.copyright}>
+            © {new Date().getFullYear()} CareNearby · Greater Sudbury, ON
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -251,129 +245,120 @@ export function PhoneScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#060D1F' },
+  container: { flex: 1, backgroundColor: '#000' },
 
-  // Hero
-  hero: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 32 },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24 },
-  brandMark: {
-    width: 44, height: 44, borderRadius: 12,
+  // Top bar
+  topBar: {
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16,
+    backgroundColor: '#000',
+  },
+  logoRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  logoIcon: {
+    width: 56, height: 56, borderRadius: 18, overflow: 'hidden',
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10, elevation: 6,
+    shadowColor: '#1A6FFF', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.5, shadowRadius: 14, elevation: 8,
   },
-  brandMarkText: { color: '#fff', fontSize: 15, fontWeight: '900', letterSpacing: -0.5 },
-  brandName:     { color: '#fff', fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
-  brandLocation: { color: 'rgba(255,255,255,0.45)', fontSize: 11, marginTop: 1 },
-
-  heroHeadline: {
-    color: '#fff', fontSize: 32, fontWeight: '900',
-    letterSpacing: -1, lineHeight: 38, marginBottom: 20,
+  logoText: { color: '#fff', fontSize: 26, fontWeight: '900', letterSpacing: -1, marginTop: 2 },
+  logoBadge: {
+    position: 'absolute', top: 6, right: 6,
+    width: 16, height: 16, borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center',
   },
-
-  pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  pill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.09)',
-    borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)',
-  },
-  pillIcon: { color: '#60A5FA', fontSize: 12, fontWeight: '700' },
-  pillText: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '500' },
+  logoBadgeText: { color: '#fff', fontSize: 9, fontWeight: '700' },
+  appName: { color: '#fff', fontSize: 20, fontWeight: '800' },
+  tagline: { color: 'rgba(255,255,255,0.45)', fontSize: 12, marginTop: 1 },
 
   // Form
-  formOuter: { flex: 1 },
-  scrollContent: { flexGrow: 1 },
-
-  card: {
+  formContainer: { flex: 1 },
+  scrollView: { flex: 1 },
+  scrollContent: { flexGrow: 1, paddingBottom: 20, backgroundColor: '#fff' },
+  formCard: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 28, borderTopRightRadius: 28,
-    paddingHorizontal: 24, paddingTop: 28, paddingBottom: 12,
-    shadowColor: '#000', shadowOffset: { width: 0, height: -8 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 20,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 24, minHeight: 300,
   },
+  formTitle: { fontSize: 26, fontWeight: '800', color: '#000', marginBottom: 6, letterSpacing: -0.5 },
+  formSub: { fontSize: 14, color: '#777', marginBottom: 22 },
 
-  // Tab
-  tabRow: {
-    flexDirection: 'row', backgroundColor: '#F1F5F9',
-    borderRadius: 14, padding: 4, marginBottom: 22,
+  // Toggle
+  toggleRow: {
+    flexDirection: 'row', backgroundColor: '#f5f5f5',
+    borderRadius: 12, padding: 4, marginBottom: 22,
   },
-  tab: { flex: 1, paddingVertical: 10, borderRadius: 11, alignItems: 'center' },
-  tabActive: {
+  toggleBtn: { flex: 1, paddingVertical: 11, borderRadius: 10, alignItems: 'center' },
+  toggleBtnActive: {
     backgroundColor: '#fff',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2,
   },
-  tabText:       { fontSize: 14, fontWeight: '600', color: '#94A3B8' },
-  tabTextActive: { color: '#0F172A' },
+  toggleText: { fontSize: 14, fontWeight: '600', color: '#888' },
+  toggleTextActive: { color: '#000' },
 
-  cardTitle: { fontSize: 24, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5, marginBottom: 4 },
-  cardSub:   { fontSize: 14, color: '#64748B', marginBottom: 24 },
-
-  // Fields
-  field: { marginBottom: 18 },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 },
-  input: {
-    backgroundColor: '#F8FAFC', borderRadius: 12,
-    paddingHorizontal: 16, paddingVertical: 14,
-    fontSize: 16, color: '#0F172A',
-    borderWidth: 1.5, borderColor: '#E2E8F0',
+  // Inputs
+  inputGroup: { marginBottom: 18 },
+  inputLabel: { fontSize: 13, fontWeight: '600', color: '#333', marginBottom: 8 },
+  textInput: {
+    backgroundColor: '#f8f8f8', borderRadius: 12,
+    paddingHorizontal: 16, paddingVertical: 15,
+    fontSize: 16, color: '#000', borderWidth: 1, borderColor: '#e8e8e8',
   },
-
-  phoneWrap: { flexDirection: 'row', gap: 8 },
-  countryChip: {
-    paddingHorizontal: 16, paddingVertical: 14,
-    backgroundColor: '#F1F5F9', borderRadius: 12,
-    borderWidth: 1.5, borderColor: '#E2E8F0',
-    alignItems: 'center', justifyContent: 'center',
+  phoneRow: { flexDirection: 'row', gap: 8, alignItems: 'stretch' },
+  countryBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: '#f0f0f0', borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 15,
+    borderWidth: 1, borderColor: '#e0e0e0',
   },
-  countryChipText: { fontSize: 15, fontWeight: '700', color: '#0F172A' },
+  countryFlag: { fontSize: 18 },
+  countryCode: { fontSize: 15, fontWeight: '700', color: '#111' },
   phoneInput: {
-    flex: 1, backgroundColor: '#F8FAFC', borderRadius: 12,
-    paddingHorizontal: 16, paddingVertical: 14,
-    fontSize: 16, color: '#0F172A',
-    borderWidth: 1.5, borderColor: '#E2E8F0',
+    flex: 1, backgroundColor: '#f8f8f8', borderRadius: 12,
+    paddingHorizontal: 16, paddingVertical: 15,
+    fontSize: 17, color: '#000', borderWidth: 1, borderColor: '#e8e8e8',
     fontWeight: '500', letterSpacing: 0.5,
   },
 
   // Role cards
-  roleGrid:      { flexDirection: 'row', gap: 10 },
+  roleRow: { flexDirection: 'row', gap: 10 },
   roleCard: {
-    flex: 1, backgroundColor: '#F8FAFC', borderRadius: 16,
-    padding: 14, borderWidth: 2, borderColor: '#E2E8F0',
-    gap: 5, position: 'relative',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 3, elevation: 1,
+    flex: 1, backgroundColor: '#fafafa', borderRadius: 16, padding: 14,
+    borderWidth: 2, borderColor: 'transparent', gap: 6,
   },
-  roleCardActiveBlue:  { borderColor: '#2563EB', backgroundColor: '#EFF6FF', shadowColor: '#2563EB', shadowOpacity: 0.12 },
-  roleCardActiveGreen: { borderColor: '#059669', backgroundColor: '#F0FDF4', shadowColor: '#059669', shadowOpacity: 0.12 },
-
-  roleIconBox: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  roleIconBoxBlue:  { backgroundColor: '#DBEAFE' },
-  roleIconBoxGreen: { backgroundColor: '#D1FAE5' },
-  roleIconBoxGray:  { backgroundColor: '#E2E8F0' },
-  roleIconText: { fontSize: 15, fontWeight: '800', color: '#475569' },
-
-  roleTitle: { fontSize: 13, fontWeight: '700', color: '#0F172A' },
-  roleSub:   { fontSize: 11, color: '#94A3B8' },
-
-  roleCheckBlue:  { position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: 9, backgroundColor: '#2563EB', alignItems: 'center', justifyContent: 'center' },
-  roleCheckGreen: { position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: 9, backgroundColor: '#059669', alignItems: 'center', justifyContent: 'center' },
-  roleCheckMark:  { color: '#fff', fontSize: 10, fontWeight: '700' },
+  roleCardSelected: { backgroundColor: '#f0f7ff' },
+  roleIconWrap: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  roleIcon: { fontSize: 22 },
+  roleLabel: { fontSize: 13, fontWeight: '700', color: '#000' },
+  roleSub: { fontSize: 11, color: '#666', lineHeight: 15 },
+  roleCheck: {
+    position: 'absolute', top: 10, right: 10,
+    width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+  },
+  roleCheckText: { color: '#fff', fontSize: 11, fontWeight: '700' },
 
   // CTA
-  cta: { marginTop: 8, borderRadius: 14, overflow: 'hidden' },
-  ctaGrad: {
+  ctaBtn: {
+    marginTop: 6, borderRadius: 14, backgroundColor: '#000',
     paddingVertical: 17, paddingHorizontal: 24,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 8,
   },
-  ctaText:  { color: '#fff', fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
-  ctaArrow: { color: 'rgba(255,255,255,0.75)', fontSize: 18, fontWeight: '600' },
+  ctaBtnDisabled: { backgroundColor: '#ccc', shadowOpacity: 0.08 },
+  ctaBtnText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  ctaArrow: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center',
+  },
+  ctaArrowText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 
-  disclaimer: {
-    fontSize: 11, color: '#94A3B8', textAlign: 'center', marginTop: 14, lineHeight: 16,
-  },
+  disclaimer: { fontSize: 11, color: '#aaa', textAlign: 'center', marginTop: 18, lineHeight: 16 },
 
-  // Bottom
-  bottomStrip: {
-    backgroundColor: '#F8FAFC', paddingVertical: 20, paddingHorizontal: 24,
-    borderTopWidth: 1, borderTopColor: '#F1F5F9',
+  // Trust strip
+  trustStrip: {
+    flexDirection: 'row', justifyContent: 'center', gap: 28,
+    paddingVertical: 20, paddingHorizontal: 24,
+    backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#f0f0f0',
   },
-  bottomStripText: { fontSize: 11, color: '#94A3B8', textAlign: 'center' },
+  trustItem: { alignItems: 'center', gap: 4 },
+  trustIcon: { fontSize: 20 },
+  trustText: { fontSize: 11, color: '#666', fontWeight: '500' },
+  copyright: { fontSize: 11, color: '#bbb', textAlign: 'center', paddingVertical: 16, backgroundColor: '#fff' },
 });
