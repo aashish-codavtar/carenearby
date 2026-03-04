@@ -5,6 +5,7 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 import { BookingDetailScreen } from '../screens/customer/BookingDetailScreen';
 import { BookingsScreen } from '../screens/customer/BookingsScreen';
 import { CreateBookingScreen } from '../screens/customer/CreateBookingScreen';
+import { HomeScreen } from '../screens/customer/HomeScreen';
 import { HelpScreen } from '../screens/shared/HelpScreen';
 import { ProfileScreen } from '../screens/shared/ProfileScreen';
 import { Colors } from '../utils/colors';
@@ -13,6 +14,7 @@ import { Booking } from '../api/client';
 export type CustomerStackParams = {
   Home: undefined;
   BookingDetail: { booking: Booking };
+  NewBooking: undefined;
   Help: undefined;
   Profile: undefined;
 };
@@ -64,9 +66,9 @@ function HomeTabs() {
       }}
     >
       <Tab.Screen
-        name="BookingsTab"
-        component={BookingsScreen}
-        options={{ tabBarIcon: ({ focused, color }) => <TabIcon emoji="📋" label="My Bookings" focused={focused} color={color} /> }}
+        name="HomeTab"
+        component={HomeScreen}
+        options={{ tabBarIcon: ({ focused, color }) => <TabIcon emoji="🏠" label="Home" focused={focused} color={color} /> }}
       />
       <Tab.Screen
         name="NewBooking"
@@ -96,9 +98,9 @@ function HomeTabs() {
         }}
       />
       <Tab.Screen
-        name="HelpTab"
-        component={HelpScreen}
-        options={{ tabBarIcon: ({ focused, color }) => <TabIcon emoji="❓" label="Help" focused={focused} color={color} /> }}
+        name="BookingsTab"
+        component={BookingsScreen}
+        options={{ tabBarIcon: ({ focused, color }) => <TabIcon emoji="📋" label="Bookings" focused={focused} color={color} /> }}
       />
     </Tab.Navigator>
   );
@@ -118,6 +120,7 @@ export function CustomerNavigator() {
       <Stack.Screen name="BookingDetail" component={BookingDetailScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Help" component={HelpScreen} options={{ headerShown: false }} />
       <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="NewBooking" component={CreateBookingScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }
