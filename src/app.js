@@ -59,7 +59,7 @@ app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, '../admin/ind
 // Tight limit on auth endpoints to prevent OTP brute-force
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max:      20,              // 20 requests per IP per window
+  max:      100,             // 100 requests per IP per window
   message:  { error: 'Too many requests. Please wait and try again.' },
   standardHeaders: true,
   legacyHeaders:   false,
