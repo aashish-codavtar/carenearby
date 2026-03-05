@@ -1,6 +1,6 @@
 const express = require('express');
-const multer = require('multer');
 const sharp = require('sharp');
+const { put: vercelBlobPut } = require('@vercel/blob');
 
 const Document = require('../models/Document');
 const PSWProfile = require('../models/PSWProfile');
@@ -9,24 +9,16 @@ const upload = require('../middleware/upload');
 
 const router = express.Router();
 
-let blobPut = null;
-if (process.env.BLOB_READ_WRITE_TOKEN) {
-  blobPut = async (pathName, body, options) => {
-    const response = await fetch(`https://public.blob.vercel-storage.com/${pathName}`, {
-      method: 'PUT',
-      headers: {
-        'x-vercel-blob-token': process.env.BLOB_READ_WRITE_TOKEN,
-        'Content-Type': options?.contentType || 'application/octet-stream',
-      },
-      body,
-    });
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Blob upload failed: ${response.status} - ${errText}`);
+const blobPut = process.env.BLOB_READ_WRITE_TOKEN
+  ? async (pathName, body, options) => {
+      const blob = await vercelBlobPut(pathName, body, {
+        access: 'public',
+        contentType: options?.contentType || 'application/octet-stream',
+        token: process.env.BLOB_READ_WRITE_TOKEN,
+      });
+      return { url: blob.url, pathname: blob.pathname };
     }
-    return { url: `https://public.blob.vercel-storage.com/${pathName}`, pathname: pathName };
-  };
-}
+  : null;
 
 async function compressImage(buffer, mimeType) {
   if (!mimeType || !mimeType.startsWith('image/')) {
