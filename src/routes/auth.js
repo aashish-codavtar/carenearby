@@ -51,7 +51,7 @@ router.post(
       .notEmpty().withMessage('name must not be blank if provided'),
     body('role')
       .optional()
-      .isIn(['CUSTOMER', 'PSW']).withMessage('role must be CUSTOMER or PSW'),
+      .isIn(['CUSTOMER', 'PSW', 'HOME_CARE']).withMessage('role must be CUSTOMER, PSW, or HOME_CARE'),
   ],
   validate,
   async (req, res) => {
@@ -66,7 +66,7 @@ router.post(
         // New user – registration fields required
         if (!name || !role) {
           return res.status(400).json({
-            error: 'First-time users must provide name and role (CUSTOMER or PSW)',
+            error: 'First-time users must provide name and role (CUSTOMER, PSW, or HOME_CARE)',
           });
         }
         user = await User.create({ phone, name, role });
